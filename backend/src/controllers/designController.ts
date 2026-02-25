@@ -130,6 +130,7 @@ export async function createDesign(
       collaboration_notes: body.collaboration_notes,
       // System-managed
       status: 'draft',
+      is_public: false,
       version: 1,
       author_ids: [req.user!.uid],
       review_status: 'unreviewed',
@@ -160,9 +161,12 @@ export async function listDesigns(
     const { discipline, difficulty, limit: limitParam, after } = req.query
     const limit = Math.min(parseInt(limitParam as string) || 20, 100)
 
+    // Use is_public (equality) as the base filter so it can be combined with
+    // array-contains (discipline_tags). Firestore prohibits 'in' + 'array-contains'
+    // in the same query.
     let query = adminDb
       .collection(DESIGNS)
-      .where('status', 'in', ['published', 'locked'])
+      .where('is_public', '==', true)
       .orderBy('created_at', 'desc')
       .limit(limit)
 
@@ -312,7 +316,7 @@ export async function publishDesign(
     const validationError = validateCreate(design as unknown as CreateDesignBody)
     if (validationError) return next(badRequest(`Cannot publish: ${validationError}`))
 
-    await ref.update({ status: 'published', updated_at: FieldValue.serverTimestamp() })
+    await ref.update({ status: 'published', is_public: true, updated_at: FieldValue.serverTimestamp() })
     const updated = await ref.get()
     res.status(200).json({ status: 'ok', data: toResponse(updated.data() as Design) })
   } catch (err) {
@@ -349,6 +353,7 @@ export async function forkDesign(
       id: docRef.id,
       title: `Fork of: ${source.title}`,
       status: 'draft',
+      is_public: false,
       version: 1,
       author_ids: [req.user!.uid],
       review_status: 'unreviewed',
