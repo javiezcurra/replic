@@ -6,6 +6,7 @@ import { errorHandler } from './middleware/errorHandler'
 import { notFound } from './middleware/notFound'
 import healthRouter from './routes/health'
 import usersRouter from './routes/users'
+import designsRouter from './routes/designs'
 
 const app = express()
 
@@ -32,6 +33,7 @@ app.use(express.urlencoded({ extended: true }))
 // Routes
 app.use('/api/health', healthRouter)
 app.use('/api/users', usersRouter)
+app.use('/api/designs', designsRouter)
 
 // Error handling (must be last)
 app.use(notFound)
