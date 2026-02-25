@@ -1,13 +1,52 @@
 import { useState } from 'react'
 import { NavLink, Link } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 
-const navLinks = [
+const publicNavLinks = [
   { to: '/', label: 'Home', end: true },
   { to: '/experiments', label: 'Experiments', end: false },
 ]
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { user, loading, signIn, signOut } = useAuth()
+
+  const navLinks = [
+    ...publicNavLinks,
+    ...(user ? [{ to: '/designs/mine', label: 'My Designs', end: false }] : []),
+  ]
+
+  const authButtons = loading ? null : user ? (
+    <>
+      <Link to="/profile" className="text-sm font-medium text-gray-700 hover:text-gray-900 px-3 py-2">
+        {user.displayName ?? user.email}
+      </Link>
+      <button onClick={signOut} className="btn-secondary text-sm">Sign out</button>
+    </>
+  ) : (
+    <>
+      <button onClick={signIn} className="btn-secondary text-sm">Sign in</button>
+      <button onClick={signIn} className="btn-primary text-sm">Get started</button>
+    </>
+  )
+
+  const mobileAuthButtons = loading ? null : user ? (
+    <>
+      <Link
+        to="/profile"
+        onClick={() => setMobileOpen(false)}
+        className="block px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100"
+      >
+        {user.displayName ?? user.email}
+      </Link>
+      <button onClick={signOut} className="btn-secondary w-full justify-center">Sign out</button>
+    </>
+  ) : (
+    <>
+      <button onClick={signIn} className="btn-secondary w-full justify-center">Sign in</button>
+      <button onClick={signIn} className="btn-primary w-full justify-center">Get started</button>
+    </>
+  )
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -43,8 +82,7 @@ export default function Navbar() {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-3">
-            <button className="btn-secondary text-sm">Sign in</button>
-            <button className="btn-primary text-sm">Get started</button>
+            {authButtons}
           </div>
 
           {/* Mobile hamburger */}
@@ -86,8 +124,7 @@ export default function Navbar() {
               </NavLink>
             ))}
             <div className="pt-2 flex flex-col gap-2">
-              <button className="btn-secondary w-full justify-center">Sign in</button>
-              <button className="btn-primary w-full justify-center">Get started</button>
+              {mobileAuthButtons}
             </div>
           </div>
         )}

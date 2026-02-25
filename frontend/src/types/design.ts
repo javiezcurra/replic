@@ -1,0 +1,100 @@
+export type DifficultyLevel =
+  | 'Pre-K'
+  | 'Elementary'
+  | 'Middle School'
+  | 'High School'
+  | 'Undergraduate'
+  | 'Graduate'
+  | 'Professional'
+
+export type DesignStatus = 'draft' | 'published' | 'locked'
+export type ForkType = 'iteration' | 'adaptation' | 'replication'
+export type VariableType = 'continuous' | 'discrete' | 'categorical'
+export type DataType = 'numeric' | 'categorical' | 'image' | 'text' | 'other'
+export type Criticality = 'required' | 'recommended' | 'optional'
+export type RiskLevel = 'none' | 'low' | 'moderate' | 'high'
+
+export interface DesignStep {
+  step_number: number
+  instruction: string
+  duration_minutes?: number
+  safety_notes?: string
+}
+
+export interface ResearchQuestion {
+  id: string
+  question: string
+  expected_data_type: DataType
+  measurement_unit?: string
+  success_criteria?: string
+}
+
+export interface Variable {
+  name: string
+  type: VariableType
+  values_or_range: string
+  units?: string
+}
+
+export interface ForkMetadata {
+  parent_design_id: string
+  fork_generation: number
+  fork_type: ForkType
+  fork_rationale: string
+}
+
+export interface Design {
+  id: string
+  title: string
+  hypothesis: string
+  discipline_tags: string[]
+  difficulty_level: DifficultyLevel
+  steps: DesignStep[]
+  research_questions: ResearchQuestion[]
+  independent_variables: Variable[]
+  dependent_variables: Variable[]
+  controlled_variables: Variable[]
+  status: DesignStatus
+  is_public: boolean
+  version: number
+  author_ids: string[]
+  execution_count: number
+  derived_design_count: number
+  fork_metadata?: ForkMetadata
+  seeking_collaborators: boolean
+  sample_size?: number
+  analysis_plan?: string
+  ethical_considerations?: string
+  collaboration_notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateDesignBody {
+  title: string
+  hypothesis: string
+  discipline_tags: string[]
+  difficulty_level: DifficultyLevel
+  steps: DesignStep[]
+  research_questions: ResearchQuestion[]
+  independent_variables: Variable[]
+  dependent_variables: Variable[]
+  controlled_variables: Variable[]
+  sample_size?: number
+  analysis_plan?: string
+  seeking_collaborators?: boolean
+  collaboration_notes?: string
+  ethical_considerations?: string
+}
+
+export type UpdateDesignBody = Partial<CreateDesignBody>
+
+export interface ForkDesignBody {
+  fork_type: ForkType
+  fork_rationale: string
+}
+
+export interface DesignListResponse {
+  designs: Design[]
+  cursor?: string
+}
