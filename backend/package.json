@@ -4,7 +4,7 @@
   "description": "Replic API server — Node.js + Express",
   "main": "dist/functions.js",
   "engines": {
-    "node": ">=18"
+    "node": "20"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
