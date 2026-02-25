@@ -42,7 +42,7 @@
         "firebase-debug.log",
         "firebase-debug.*.log"
       ],
-      "predeploy": []
+      "predeploy": ["npm --prefix backend run build"]
     }
   ]
 }
