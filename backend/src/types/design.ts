@@ -1,4 +1,4 @@
-import { firestore } from 'firebase-admin'
+import { Timestamp } from 'firebase-admin/firestore'
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
@@ -131,8 +131,8 @@ export interface Design {
   derived_design_count: number
   fork_metadata?: ForkMetadata
 
-  created_at: firestore.Timestamp
-  updated_at: firestore.Timestamp
+  created_at: Timestamp
+  updated_at: Timestamp
 }
 
 // ─── API request bodies ───────────────────────────────────────────────────────
