@@ -92,15 +92,15 @@ jobs:
   # ──────────────────────────────────────────────
   # 3. Deploy to Firebase (main branch only)
   #
-  # Firebase CLI calls serviceusage.googleapis.com to pre-flight every API
-  # it touches (cloudfunctions, runtimeconfig, etc.), and our service account
-  # lacks serviceusage.services.use — causing cascading 403s.
+  # The FIREBASE_SERVICE_ACCOUNT service account currently lacks
+  # cloudfunctions.functions.get (and broader cloudfunctions.* permissions),
+  # so functions deployment is blocked regardless of tool used (Firebase CLI
+  # or gcloud). Hosting-only deploy works fine.
   #
-  # Fix: bypass Firebase CLI for functions entirely.
-  # - Functions → gcloud functions deploy (calls Cloud Functions API directly,
-  #   no serviceusage pre-flight)
-  # - Hosting   → firebase deploy --only hosting (only checks
-  #   firebasehosting.googleapis.com, which IS enabled on every Firebase project)
+  # To re-enable functions deployment, grant the service account
+  # roles/cloudfunctions.developer in GCP IAM console:
+  #   https://console.cloud.google.com/iam-admin/iam
+  # Then restore the "Deploy Cloud Function" step from git history.
   # ──────────────────────────────────────────────
   deploy:
     name: Deploy to Firebase
@@ -117,39 +117,11 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
-      - name: Download backend artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: backend-dist
-          path: backend/dist
-
-      # Sets GOOGLE_APPLICATION_CREDENTIALS and configures gcloud auth
-      # from the same service account JSON — no separate credential file step needed.
+      # Sets GOOGLE_APPLICATION_CREDENTIALS for Firebase CLI below.
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-
-      - name: Set up gcloud CLI
-        uses: google-github-actions/setup-gcloud@v2
-
-      # gcloud calls cloudfunctions.googleapis.com directly — no serviceusage pre-flight.
-      # Cloud Build installs production deps from package.json after upload
-      # (node_modules is excluded by backend/.gcloudignore).
-      - name: Deploy Cloud Function
-        run: |
-          gcloud functions deploy api \
-            --project="$FIREBASE_PROJECT_ID" \
-            --runtime=nodejs20 \
-            --trigger-http \
-            --allow-unauthenticated \
-            --source=backend \
-            --entry-point=api \
-            --region=us-central1 \
-            --set-env-vars="^|^NODE_ENV=production|CORS_ORIGINS=https://${FIREBASE_PROJECT_ID}.web.app,https://${FIREBASE_PROJECT_ID}.firebaseapp.com" \
-            --quiet
-        env:
-          FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -159,8 +131,6 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      # Only deploys hosting — checks only firebasehosting.googleapis.com (enabled).
-      # GOOGLE_APPLICATION_CREDENTIALS is already set by the auth step above.
       - name: Deploy Firebase Hosting
         run: firebase deploy --only hosting --non-interactive --project "$FIREBASE_PROJECT_ID"
         env:
