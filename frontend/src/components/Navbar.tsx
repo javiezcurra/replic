@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
-const navLinks = [
+const publicNavLinks = [
   { to: '/', label: 'Home', end: true },
   { to: '/experiments', label: 'Experiments', end: false },
 ]
@@ -10,6 +10,11 @@ const navLinks = [
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { user, loading, signIn, signOut } = useAuth()
+
+  const navLinks = [
+    ...publicNavLinks,
+    ...(user ? [{ to: '/designs/mine', label: 'My Designs', end: false }] : []),
+  ]
 
   const authButtons = loading ? null : user ? (
     <>
