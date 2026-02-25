@@ -7,6 +7,7 @@ import {
   signOut as firebaseSignOut,
 } from 'firebase/auth'
 import { auth } from '../lib/firebase'
+import { api } from '../lib/api'
 
 interface AuthContextValue {
   user: User | null
@@ -34,14 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const result = await signInWithPopup(auth, provider)
     // Upsert Firestore profile via backend
     try {
-      const token = await result.user.getIdToken()
-      await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users/me`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      await api.post('/api/users/me')
     } catch {
       // Non-fatal — profile upsert will retry on next sign-in
     }
