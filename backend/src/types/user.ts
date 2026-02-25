@@ -1,4 +1,4 @@
-import { firestore } from 'firebase-admin'
+import { Timestamp } from 'firebase-admin/firestore'
 
 export interface UserScores {
   designer: number
@@ -14,8 +14,8 @@ export interface UserProfile {
   bio: string | null
   affiliation: string | null
   scores: UserScores
-  createdAt: firestore.Timestamp
-  updatedAt: firestore.Timestamp
+  createdAt: Timestamp
+  updatedAt: Timestamp
 }
 
 export interface UserProfileResponse extends Omit<UserProfile, 'createdAt' | 'updatedAt'> {
