@@ -1,0 +1,19 @@
+# What gcloud uploads for Cloud Functions deployment.
+# When this file exists, gcloud uses ONLY this list (ignores .gitignore).
+# We include dist/ (compiled JS) and package*.json; exclude everything else.
+
+.git
+.gitignore
+.gcloudignore
+.env*
+
+# TypeScript source — not needed at runtime (dist/ is already compiled)
+src/
+tsconfig.json
+
+# Dev tooling
+.eslintrc*
+*.md
+
+# Dependencies — Cloud Build installs production deps from package.json
+node_modules/
