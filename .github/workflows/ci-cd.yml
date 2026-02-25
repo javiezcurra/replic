@@ -119,9 +119,9 @@ jobs:
           name: backend-dist
           path: backend/dist
 
-      - name: Install backend production deps
+      - name: Install backend deps
         working-directory: backend
-        run: npm ci --omit=dev
+        run: npm ci
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
