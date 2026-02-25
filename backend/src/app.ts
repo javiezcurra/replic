@@ -5,6 +5,7 @@ import morgan from 'morgan'
 import { errorHandler } from './middleware/errorHandler'
 import { notFound } from './middleware/notFound'
 import healthRouter from './routes/health'
+import usersRouter from './routes/users'
 
 const app = express()
 
@@ -30,6 +31,7 @@ app.use(express.urlencoded({ extended: true }))
 
 // Routes
 app.use('/api/health', healthRouter)
+app.use('/api/users', usersRouter)
 
 // Error handling (must be last)
 app.use(notFound)
