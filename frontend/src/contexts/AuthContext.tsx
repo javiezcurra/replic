@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function signIn() {
     const provider = new GoogleAuthProvider()
-    const result = await signInWithPopup(auth, provider)
+    await signInWithPopup(auth, provider)
     // Upsert Firestore profile via backend
     try {
       await api.post('/api/users/me')
