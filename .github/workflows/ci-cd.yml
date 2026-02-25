@@ -92,10 +92,11 @@ jobs:
   # ──────────────────────────────────────────────
   # 3. Deploy to Firebase (main branch only)
   #
-  # Functions: gcloud functions deploy — calls cloudfunctions.googleapis.com
-  # directly, no serviceusage pre-flight.
-  # Hosting: firebase deploy --only hosting — only checks
-  # firebasehosting.googleapis.com (always enabled on Firebase projects).
+  # Uses FIREBASE_TOKEN (a CI token from `firebase login:ci`) rather than
+  # a service account. The token authenticates as a project owner, which
+  # bypasses all the IAM role gaps that blocked service-account-based deploys.
+  #
+  # To rotate: run `firebase login:ci` locally and update the GitHub secret.
   # ──────────────────────────────────────────────
   deploy:
     name: Deploy to Firebase
@@ -118,32 +119,9 @@ jobs:
           name: backend-dist
           path: backend/dist
 
-      # Sets GOOGLE_APPLICATION_CREDENTIALS and configures gcloud auth.
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-
-      - name: Set up gcloud CLI
-        uses: google-github-actions/setup-gcloud@v2
-
-      # Calls cloudfunctions.googleapis.com directly — no serviceusage pre-flight.
-      # Cloud Build installs production deps server-side (node_modules excluded
-      # by backend/.gcloudignore; dist/ is included).
-      - name: Deploy Cloud Function
-        run: |
-          gcloud functions deploy api \
-            --project="$FIREBASE_PROJECT_ID" \
-            --runtime=nodejs20 \
-            --trigger-http \
-            --allow-unauthenticated \
-            --source=backend \
-            --entry-point=api \
-            --region=us-central1 \
-            --set-env-vars="^|^NODE_ENV=production|CORS_ORIGINS=https://${FIREBASE_PROJECT_ID}.web.app,https://${FIREBASE_PROJECT_ID}.firebaseapp.com" \
-            --quiet
-        env:
-          FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+      - name: Install backend production deps
+        working-directory: backend
+        run: npm ci --omit=dev
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -153,8 +131,8 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      # GOOGLE_APPLICATION_CREDENTIALS already set by the auth step above.
-      - name: Deploy Firebase Hosting
-        run: firebase deploy --only hosting --non-interactive --project "$FIREBASE_PROJECT_ID"
+      - name: Deploy to Firebase
+        run: firebase deploy --only hosting,functions --non-interactive --project "$FIREBASE_PROJECT_ID"
         env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
           FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
