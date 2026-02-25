@@ -121,6 +121,7 @@ export interface Design {
 
   // Metadata (system-managed)
   status: DesignStatus
+  is_public: boolean           // true when status is 'published' or 'locked'
   version: number
   author_ids: string[]
   review_status: ReviewStatus
