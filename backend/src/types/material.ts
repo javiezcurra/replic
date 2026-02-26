@@ -41,6 +41,20 @@ export interface CreateMaterialBody {
   tags?: string[]
 }
 
+export interface UpdateMaterialBody {
+  name?: string
+  type?: MaterialType
+  category?: MaterialCategory
+  description?: string | null
+  link?: string | null
+  image_url?: string | null
+  supplier?: string | null
+  typical_cost_usd?: number | null
+  safety_notes?: string | null
+  tags?: string[]
+  is_verified?: boolean
+}
+
 // ─── API response types ───────────────────────────────────────────────────────
 
 export interface MaterialResponse extends Omit<Material, 'created_at' | 'updated_at'> {

@@ -6,6 +6,7 @@ import {
   Material,
   MaterialResponse,
   CreateMaterialBody,
+  UpdateMaterialBody,
   MaterialType,
   MaterialCategory,
 } from '../types/material'
@@ -131,6 +132,54 @@ export async function createMaterial(
     await docRef.set(material)
     const snap = await docRef.get()
     res.status(201).json({ status: 'ok', data: toResponse(snap.data() as Material) })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ─── PATCH /api/materials/:id ─────────────────────────────────────────────────
+// Admin-only. Partial update — only supplied fields are written.
+export async function updateMaterial(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ref = adminDb.collection(MATERIALS).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) return next(notFound())
+
+    const body = req.body as UpdateMaterialBody
+
+    if (body.name !== undefined && !body.name.trim()) {
+      return next(badRequest('name cannot be empty'))
+    }
+    if (body.type !== undefined && !MATERIAL_TYPES.includes(body.type)) {
+      return next(badRequest(`type must be one of: ${MATERIAL_TYPES.join(', ')}`))
+    }
+    if (body.category !== undefined && !MATERIAL_CATEGORIES.includes(body.category)) {
+      return next(badRequest(`category must be one of: ${MATERIAL_CATEGORIES.join(', ')}`))
+    }
+    if (body.tags !== undefined && body.tags.length > 10) {
+      return next(badRequest('tags cannot exceed 10'))
+    }
+
+    const patch: Record<string, unknown> = { updated_at: FieldValue.serverTimestamp() }
+    if (body.name !== undefined)              patch.name              = body.name.trim()
+    if (body.type !== undefined)              patch.type              = body.type
+    if (body.category !== undefined)          patch.category          = body.category
+    if ('description' in body)               patch.description       = body.description ?? null
+    if ('link' in body)                      patch.link              = body.link ?? null
+    if ('image_url' in body)                 patch.image_url         = body.image_url ?? null
+    if ('supplier' in body)                  patch.supplier          = body.supplier ?? null
+    if ('typical_cost_usd' in body)          patch.typical_cost_usd  = body.typical_cost_usd ?? null
+    if ('safety_notes' in body)              patch.safety_notes      = body.safety_notes ?? null
+    if (body.tags !== undefined)             patch.tags              = body.tags
+    if (body.is_verified !== undefined)      patch.is_verified       = body.is_verified
+
+    await ref.update(patch)
+    const updated = await ref.get()
+    res.status(200).json({ status: 'ok', data: toResponse(updated.data() as Material) })
   } catch (err) {
     next(err)
   }
