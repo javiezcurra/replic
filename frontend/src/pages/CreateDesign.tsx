@@ -16,8 +16,8 @@ export default function CreateDesign() {
     setError('')
     try {
       const body = formValuesToBody(values)
-      const created = await api.post<Design>('/api/designs', body)
-      navigate(`/designs/${created.id}`)
+      const res = await api.post<{ status: string; data: Design }>('/api/designs', body)
+      navigate(`/designs/${res.data.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create design')
     } finally {

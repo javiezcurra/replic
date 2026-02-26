@@ -39,8 +39,8 @@ export default function EditDesign() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.get<Design>(`/api/designs/${id}`)
-      .then((d) => {
+    api.get<{ status: string; data: Design }>(`/api/designs/${id}`)
+      .then(({ data: d }) => {
         setDesign(d)
         setValues(designToFormValues(d))
       })
