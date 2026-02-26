@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
-import type { Design } from '../types/design'
+import type { Design, DesignMaterial } from '../types/design'
+import type { Material } from '../types/material'
 import DesignForm, { defaultFormValues, formValuesToBody, type DesignFormValues } from '../components/DesignForm'
 
 function designToFormValues(d: Design): DesignFormValues {
@@ -10,9 +11,14 @@ function designToFormValues(d: Design): DesignFormValues {
     summary: d.summary ?? '',
     discipline_tags: d.discipline_tags.join(', '),
     difficulty_level: d.difficulty_level,
-    // Materials can't be pre-populated without fetching full Material objects;
-    // existing materials are preserved through the PATCH body which is built separately.
-    materials: [],
+    // Populated with placeholder names; loadMaterialDetails() overwrites with real names.
+    materials: d.materials.map((m) => ({
+      id: m.material_id,
+      name: m.material_id,
+      quantity: m.quantity,
+      alternatives_allowed: m.alternatives_allowed,
+      criticality: m.criticality,
+    })),
     steps: d.steps.length ? d.steps : [{ step_number: 1, instruction: '' }],
     research_questions: d.research_questions.length
       ? d.research_questions
@@ -41,11 +47,28 @@ export default function EditDesign() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
+  async function loadMaterialDetails(designMaterials: DesignMaterial[]) {
+    if (!designMaterials.length) return
+    const results = await Promise.allSettled(
+      designMaterials.map((m) =>
+        api.get<{ status: string; data: Material }>(`/api/materials/${m.material_id}`)
+      )
+    )
+    setValues((prev) => ({
+      ...prev,
+      materials: prev.materials.map((entry, i) => {
+        const r = results[i]
+        return r.status === 'fulfilled' ? { ...entry, name: r.value.data.name } : entry
+      }),
+    }))
+  }
+
   useEffect(() => {
     api.get<{ status: string; data: Design }>(`/api/designs/${id}`)
       .then(({ data: d }) => {
         setDesign(d)
         setValues(designToFormValues(d))
+        loadMaterialDetails(d.materials)
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
