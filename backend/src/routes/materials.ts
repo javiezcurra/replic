@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { requireAuth, requireAdmin } from '../middleware/auth'
-import { listMaterials, createMaterial, getMaterial, updateMaterial } from '../controllers/materialController'
+import { listMaterials, createMaterial, getMaterial, updateMaterial, bulkUpsertMaterials } from '../controllers/materialController'
 
 const router = Router()
 
@@ -13,6 +13,7 @@ router.use(requireAuth)
 router.post('/', createMaterial)
 
 // Admin required
+router.post('/bulk-upsert', requireAdmin, bulkUpsertMaterials)
 router.patch('/:id', requireAdmin, updateMaterial)
 
 export default router
