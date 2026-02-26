@@ -46,6 +46,7 @@ export default function EditDesign() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [showVersionWarning, setShowVersionWarning] = useState(false)
 
   async function loadMaterialDetails(designMaterials: DesignMaterial[]) {
     if (!designMaterials.length) return
@@ -69,6 +70,12 @@ export default function EditDesign() {
         setDesign(d)
         setValues(designToFormValues(d))
         loadMaterialDetails(d.materials)
+        // Show the warning when the design is published and has no pending draft yet.
+        // If has_draft_changes is already true, the author has already seen the warning
+        // in a previous session and created a draft.
+        if (d.status === 'published' && !d.has_draft_changes) {
+          setShowVersionWarning(true)
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
@@ -97,10 +104,54 @@ export default function EditDesign() {
   }
 
   const isLocked = design ? design.execution_count >= 1 : false
+  const publishedVersionLabel = design && design.published_version > 0
+    ? `v${design.published_version}`
+    : 'the current version'
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Edit Design</h1>
+
+      {/* Warning modal shown when editing a published design for the first time */}
+      {showVersionWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">📋</span>
+              <div>
+                <h2
+                  className="text-lg font-semibold"
+                  style={{ fontFamily: 'var(--font-body)', color: 'var(--color-text)' }}
+                >
+                  You're editing a published design
+                </h2>
+                <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                  Your changes will be saved as a private draft. {publishedVersionLabel} will remain
+                  publicly visible until you publish the new version.
+                </p>
+                <p className="text-sm mt-2" style={{ color: 'var(--color-text-muted)' }}>
+                  You can save your edits as many times as you like — nothing goes public until you
+                  click <strong>Publish</strong>.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                className="btn-primary text-sm flex-1"
+                onClick={() => setShowVersionWarning(false)}
+              >
+                Got it, start editing
+              </button>
+              <button
+                className="btn-secondary text-sm flex-1"
+                onClick={() => navigate(`/designs/${id}`)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <DesignForm values={values} onChange={setValues} lockedMethodology={isLocked} />

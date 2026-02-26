@@ -69,6 +69,8 @@ export interface Design {
   status: DesignStatus
   is_public: boolean
   version: number
+  published_version: number    // user-facing version number; 0 = never published
+  has_draft_changes: boolean   // true when a published design has unsaved edits
   author_ids: string[]
   execution_count: number
   derived_design_count: number
@@ -116,4 +118,15 @@ export interface DesignListResponse {
   status: string
   data: Design[]
   count: number
+}
+
+export interface DesignVersionSummary {
+  version_number: number
+  published_at: string
+  published_by: string
+  changelog?: string
+}
+
+export interface DesignVersionSnapshot extends DesignVersionSummary {
+  data: Design
 }

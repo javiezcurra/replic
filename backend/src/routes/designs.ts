@@ -7,6 +7,8 @@ import {
   getDesign,
   updateDesign,
   publishDesign,
+  listDesignVersions,
+  getDesignVersion,
   forkDesign,
   deleteDesign,
 } from '../controllers/designController'
@@ -15,7 +17,9 @@ const router = Router()
 
 // Public — no auth required
 router.get('/', listDesigns)
-router.get('/:id', optionalAuth, getDesign)  // optionalAuth sets req.user so authors can view their drafts
+router.get('/:id', optionalAuth, getDesign)           // optionalAuth so authors see their draft state
+router.get('/:id/versions', optionalAuth, listDesignVersions)
+router.get('/:id/versions/:versionNum', optionalAuth, getDesignVersion)
 
 // Auth required for all mutations and personal views
 router.use(requireAuth)
