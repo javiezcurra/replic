@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, optionalAuth } from '../middleware/auth'
 import {
   createDesign,
   listDesigns,
@@ -15,7 +15,7 @@ const router = Router()
 
 // Public — no auth required
 router.get('/', listDesigns)
-router.get('/:id', getDesign)    // drafts return 404 to unauthenticated callers
+router.get('/:id', optionalAuth, getDesign)  // optionalAuth sets req.user so authors can view their drafts
 
 // Auth required for all mutations and personal views
 router.use(requireAuth)

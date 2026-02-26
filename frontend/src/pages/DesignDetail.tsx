@@ -96,7 +96,7 @@ export default function DesignDetail() {
     )
   }
 
-  if (notFound || !design) {
+  if (notFound) {
     return (
       <div className="max-w-2xl mx-auto py-20 px-4 text-center">
         <p className="text-4xl mb-4">🔍</p>
@@ -108,6 +108,22 @@ export default function DesignDetail() {
       </div>
     )
   }
+
+  if (error && !design) {
+    return (
+      <div className="max-w-2xl mx-auto py-20 px-4 text-center">
+        <p className="text-4xl mb-4">⚠️</p>
+        <h1 className="text-xl font-semibold text-ink">Could not load design</h1>
+        <p className="mt-2 text-sm text-muted">{error}</p>
+        <Link to="/experiments" className="mt-4 inline-block btn-secondary text-sm">
+          Browse experiments
+        </Link>
+      </div>
+    )
+  }
+
+  // Narrow the type — all null/error states are handled above.
+  if (!design) return null
 
   const isAuthor  = user ? design.author_ids.includes(user.uid) : false
   const canPublish = isAuthor && design.status === 'draft'
