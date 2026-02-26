@@ -6,6 +6,25 @@ export interface UserScores {
   reviewer: number
 }
 
+export type UserRole =
+  | 'citizen_scientist'
+  | 'student'
+  | 'teacher'
+  | 'professional_researcher'
+  | 'industry_professional'
+  | 'hobbyist'
+  | 'other'
+
+export const USER_ROLES: { value: UserRole; label: string }[] = [
+  { value: 'citizen_scientist',    label: 'Citizen Scientist' },
+  { value: 'student',              label: 'Student' },
+  { value: 'teacher',              label: 'Teacher / Educator' },
+  { value: 'professional_researcher', label: 'Professional Researcher' },
+  { value: 'industry_professional',label: 'Industry Professional' },
+  { value: 'hobbyist',             label: 'Hobbyist' },
+  { value: 'other',                label: 'Other' },
+]
+
 export interface UserProfile {
   uid: string
   displayName: string
@@ -13,6 +32,8 @@ export interface UserProfile {
   photoURL: string | null
   bio: string | null
   affiliation: string | null
+  role: UserRole | null
+  is_admin: boolean
   scores: UserScores
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -30,4 +51,6 @@ export interface UpdateUserBody {
   photoURL?: string | null
   bio?: string | null
   affiliation?: string | null
+  role?: UserRole | null
+  // is_admin is intentionally excluded — not user-settable
 }

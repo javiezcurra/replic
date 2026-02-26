@@ -17,7 +17,7 @@ import BulkUploadMaterialsModal from '../components/BulkUploadMaterialsModal'
 const CATEGORIES: { value: MaterialCategory; label: string; emoji: string }[] = [
   { value: 'glassware',  label: 'Glassware',  emoji: '🫙' },
   { value: 'reagent',    label: 'Reagent',    emoji: '⚗️' },
-  { value: 'equipment',  label: 'Equipment',  emoji: '🔬' },
+  { value: 'equipment',  label: 'Instruments',  emoji: '🔬' },
   { value: 'biological', label: 'Biological', emoji: '🧬' },
   { value: 'other',      label: 'Other',      emoji: '📦' },
 ]
