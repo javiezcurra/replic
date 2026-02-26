@@ -3,11 +3,12 @@
  * Only accessible to users with is_admin === true.
  */
 import { useEffect, useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
-import { api } from '../lib/api'
+import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import type { Material, MaterialCategory, MaterialListResponse } from '../types/material'
+import { api } from '../lib/api'
 import BulkUploadMaterialsModal from '../components/BulkUploadMaterialsModal'
+import CreateMaterialModal from '../components/CreateMaterialModal'
 import MaterialCard from '../components/MaterialCard'
 import MaterialDetailModal from '../components/MaterialDetailModal'
 
@@ -33,6 +34,7 @@ export default function Materials() {
   const [loadingMoreCon, setLoadingMoreCon] = useState(false)
   const [category, setCategory] = useState<MaterialCategory | ''>('')
   const [showBulkUpload, setShowBulkUpload] = useState(false)
+  const [showCreateMaterial, setShowCreateMaterial] = useState(false)
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
 
   async function fetchAll() {
@@ -83,6 +85,21 @@ export default function Materials() {
     if (isAdmin) fetchAll()
   }, [isAdmin])  // eslint-disable-line react-hooks/exhaustive-deps
 
+  function handleMaterialCreated(m: Material) {
+    if (m.type === 'Equipment') {
+      setEquipmentAll((prev) => [m, ...prev])
+    } else {
+      setConsumablesAll((prev) => [m, ...prev])
+    }
+    setShowCreateMaterial(false)
+  }
+
+  function handleMaterialUpdated(updated: Material) {
+    setEquipmentAll((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
+    setConsumablesAll((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
+    setSelectedMaterial(updated)
+  }
+
   // Admin guard — wait for auth to resolve before redirecting
   if (!authLoading && (!user || !isAdmin)) {
     return <Navigate to="/" replace />
@@ -126,8 +143,8 @@ export default function Materials() {
               </svg>
               Bulk upload
             </button>
-            <Link
-              to="/materials/new"
+            <button
+              onClick={() => setShowCreateMaterial(true)}
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl
                          text-sm font-semibold text-white hover:opacity-90 transition-all"
               style={{ background: 'var(--color-primary)' }}
@@ -136,7 +153,7 @@ export default function Materials() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
               Submit material
-            </Link>
+            </button>
           </div>
         </div>
 
@@ -230,10 +247,18 @@ export default function Materials() {
         />
       )}
 
+      {showCreateMaterial && (
+        <CreateMaterialModal
+          onClose={() => setShowCreateMaterial(false)}
+          onCreated={handleMaterialCreated}
+        />
+      )}
+
       {selectedMaterial && (
         <MaterialDetailModal
           material={selectedMaterial}
           onClose={() => setSelectedMaterial(null)}
+          onSave={handleMaterialUpdated}
         />
       )}
     </div>

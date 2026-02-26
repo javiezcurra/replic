@@ -1,4 +1,4 @@
-import type { MaterialCategory, MaterialType } from '../types/material'
+import type { Material, MaterialCategory, MaterialType } from '../types/material'
 import ImageUpload from './ImageUpload'
 
 const CATEGORY_OPTIONS: { value: MaterialCategory; label: string }[] = [
@@ -37,6 +37,22 @@ export function defaultMaterialFormValues(): MaterialFormValues {
   }
 }
 
+/** Populate form from an existing Material (for edit mode). */
+export function materialToFormValues(m: Material): MaterialFormValues {
+  return {
+    name: m.name,
+    type: m.type,
+    category: m.category,
+    description: m.description ?? '',
+    link: m.link ?? '',
+    supplier: m.supplier ?? '',
+    typical_cost_usd: m.typical_cost_usd != null ? String(m.typical_cost_usd) : '',
+    safety_notes: m.safety_notes ?? '',
+    tags: m.tags.join(', '),
+    image_url: m.image_url ?? '',
+  }
+}
+
 export function formValuesToBody(v: MaterialFormValues) {
   return {
     name: v.name,
@@ -49,6 +65,22 @@ export function formValuesToBody(v: MaterialFormValues) {
     ...(v.safety_notes ? { safety_notes: v.safety_notes } : {}),
     tags: v.tags.split(',').map((t) => t.trim()).filter(Boolean),
     ...(v.image_url ? { image_url: v.image_url } : {}),
+  }
+}
+
+/** Like formValuesToBody but includes null for cleared optional fields (for PATCH). */
+export function formValuesToUpdateBody(v: MaterialFormValues) {
+  return {
+    name: v.name,
+    type: v.type as MaterialType,
+    category: v.category as MaterialCategory,
+    description: v.description || null,
+    link: v.link || null,
+    supplier: v.supplier || null,
+    typical_cost_usd: v.typical_cost_usd ? parseFloat(v.typical_cost_usd) : null,
+    safety_notes: v.safety_notes || null,
+    tags: v.tags.split(',').map((t) => t.trim()).filter(Boolean),
+    image_url: v.image_url || null,
   }
 }
 
