@@ -8,6 +8,7 @@ import healthRouter from './routes/health'
 import usersRouter from './routes/users'
 import designsRouter from './routes/designs'
 import materialsRouter from './routes/materials'
+import labRouter from './routes/lab'
 
 const app = express()
 
@@ -36,6 +37,7 @@ app.use('/api/health', healthRouter)
 app.use('/api/users', usersRouter)
 app.use('/api/designs', designsRouter)
 app.use('/api/materials', materialsRouter)
+app.use('/api/lab', labRouter)
 
 // Error handling (must be last)
 app.use(notFound)

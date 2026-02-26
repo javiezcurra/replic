@@ -6,11 +6,11 @@ import Experiments from './pages/Experiments'
 import NotFound from './pages/NotFound'
 import Profile from './pages/Profile'
 import MyDesigns from './pages/MyDesigns'
+import MyLab from './pages/MyLab'
 import CreateDesign from './pages/CreateDesign'
 import EditDesign from './pages/EditDesign'
 import DesignDetail from './pages/DesignDetail'
 import Materials from './pages/Materials'
-import MaterialDetail from './pages/MaterialDetail'
 import CreateMaterial from './pages/CreateMaterial'
 
 export default function App() {
@@ -21,15 +21,16 @@ export default function App() {
         <Route index element={<Home />} />
         <Route path="experiments" element={<Experiments />} />
         <Route path="designs/:id" element={<DesignDetail />} />
-        <Route path="materials" element={<Materials />} />
-        <Route path="materials/:id" element={<MaterialDetail />} />
 
-        {/* Protected */}
+        {/* Protected (logged-in users) */}
         <Route element={<PrivateRoute />}>
           <Route path="profile" element={<Profile />} />
+          <Route path="my-lab" element={<MyLab />} />
           <Route path="designs/mine" element={<MyDesigns />} />
           <Route path="designs/new" element={<CreateDesign />} />
           <Route path="designs/:id/edit" element={<EditDesign />} />
+          {/* Admin-only — access guard is in the Materials component */}
+          <Route path="materials" element={<Materials />} />
           <Route path="materials/new" element={<CreateMaterial />} />
         </Route>
 

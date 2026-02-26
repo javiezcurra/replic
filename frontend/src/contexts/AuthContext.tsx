@@ -11,6 +11,7 @@ import { api } from '../lib/api'
 
 interface AuthContextValue {
   user: User | null
+  isAdmin: boolean
   loading: boolean
   signIn: () => Promise<void>
   signOut: () => Promise<void>
@@ -20,11 +21,24 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser)
+      if (firebaseUser) {
+        try {
+          const res = await api.get<{ status: string; data: { is_admin: boolean } }>(
+            '/api/users/me',
+          )
+          setIsAdmin(res.data.is_admin ?? false)
+        } catch {
+          setIsAdmin(false)
+        }
+      } else {
+        setIsAdmin(false)
+      }
       setLoading(false)
     })
     return unsubscribe
@@ -46,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, isAdmin, loading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )
