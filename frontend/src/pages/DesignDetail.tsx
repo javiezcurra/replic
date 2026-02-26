@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
-import type { Design, ForkType } from '../types/design'
+import type { Design, DesignMaterial, ForkType } from '../types/design'
+import type { Material } from '../types/material'
+import MaterialCard from '../components/MaterialCard'
+import MaterialDetailModal from '../components/MaterialDetailModal'
 
 const FORK_TYPES: { value: ForkType; label: string; description: string }[] = [
   { value: 'replication', label: 'Replication', description: 'Reproduce the same study to verify results' },
@@ -41,11 +44,44 @@ export default function DesignDetail() {
   const [forkRationale, setForkRationale] = useState('')
   const [forking, setForking] = useState(false)
   const [error, setError] = useState('')
+  const [materialMap, setMaterialMap] = useState<Record<string, Material>>({})
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
+  const [refTitleMap, setRefTitleMap] = useState<Record<string, string>>({})
+
+  async function loadMaterials(materials: DesignMaterial[]) {
+    if (!materials.length) return
+    const results = await Promise.allSettled(
+      materials.map((m) =>
+        api.get<{ status: string; data: Material }>(`/api/materials/${m.material_id}`)
+      )
+    )
+    const map: Record<string, Material> = {}
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') map[materials[i].material_id] = r.value.data
+    })
+    setMaterialMap(map)
+  }
+
+  async function loadRefTitles(ids: string[]) {
+    if (!ids.length) return
+    const results = await Promise.allSettled(
+      ids.map((refId) =>
+        api.get<{ status: string; data: { title: string } }>(`/api/designs/${refId}`)
+      )
+    )
+    const map: Record<string, string> = {}
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') map[ids[i]] = r.value.data.title
+    })
+    setRefTitleMap(map)
+  }
 
   async function loadDesign() {
     try {
       const res = await api.get<{ status: string; data: Design }>(`/api/designs/${id}`)
       setDesign(res.data)
+      loadMaterials(res.data.materials)
+      loadRefTitles(res.data.reference_experiment_ids ?? [])
     } catch (err: any) {
       if (err?.status === 404) setNotFound(true)
       else setError(err?.message ?? 'Failed to load')
@@ -136,7 +172,6 @@ export default function DesignDetail() {
     (design.controlled_variables?.length   ?? 0) > 0
 
   const hasSidebarDetails =
-    !!design.hypothesis ||
     !!design.safety_considerations ||
     design.sample_size != null ||
     !!design.analysis_plan ||
@@ -219,11 +254,59 @@ export default function DesignDetail() {
         {/* ────────── Main content (left, 2/3) ────────── */}
         <div className="lg:col-span-2 space-y-5">
 
-          {/* Summary */}
-          {design.summary && (
+          {/* Overview (summary + optional hypothesis) */}
+          {(design.summary || design.hypothesis) && (
             <section className="card p-6">
-              <SectionLabel>Summary</SectionLabel>
-              <p className="text-gray-800 leading-relaxed">{design.summary}</p>
+              <SectionLabel>Overview</SectionLabel>
+              {design.summary && (
+                <p className="text-gray-800 leading-relaxed">{design.summary}</p>
+              )}
+              {design.hypothesis && (
+                <>
+                  <p className="text-xs font-semibold text-muted mt-4 mb-1">Hypothesis</p>
+                  <p className="text-gray-800 leading-relaxed">{design.hypothesis}</p>
+                </>
+              )}
+            </section>
+          )}
+
+          {/* Materials */}
+          {design.materials.length > 0 && (
+            <section className="card p-6">
+              <SectionLabel>Materials</SectionLabel>
+              <ul className="space-y-3">
+                {design.materials.map((m) => {
+                  const mat = materialMap[m.material_id]
+                  return (
+                    <li key={m.material_id}>
+                      {mat ? (
+                        <MaterialCard
+                          material={mat}
+                          onDetails={setSelectedMaterial}
+                        />
+                      ) : (
+                        <div className="rounded-xl border-2 border-surface-2 px-4 py-3">
+                          <p className="text-sm font-mono text-muted">{m.material_id}</p>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 mt-1.5 pl-1">
+                        <span className="text-xs text-gray-700">{m.quantity}</span>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ${
+                            m.criticality === 'required'
+                              ? 'bg-red-50 text-red-600'
+                              : m.criticality === 'recommended'
+                              ? 'bg-yellow-50 text-yellow-700'
+                              : 'bg-surface-2 text-muted'
+                          }`}
+                        >
+                          {m.criticality}
+                        </span>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
             </section>
           )}
 
@@ -314,102 +397,10 @@ export default function DesignDetail() {
               </div>
             </section>
           )}
-
-          {/* Materials */}
-          {design.materials.length > 0 && (
-            <section className="card p-6">
-              <SectionLabel>Materials</SectionLabel>
-              <ul className="divide-y divide-surface-2">
-                {design.materials.map((m) => (
-                  <li key={m.material_id} className="py-3 flex items-start justify-between gap-4 first:pt-0 last:pb-0">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-ink font-mono">{m.material_id}</p>
-                      {m.usage_notes && (
-                        <p className="text-xs text-muted mt-0.5">{m.usage_notes}</p>
-                      )}
-                    </div>
-                    <div className="shrink-0 flex flex-col items-end gap-1.5">
-                      <span className="text-sm text-gray-700">{m.quantity}</span>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          m.criticality === 'required'
-                            ? 'bg-red-50 text-red-600'
-                            : m.criticality === 'recommended'
-                            ? 'bg-yellow-50 text-yellow-700'
-                            : 'bg-surface-2 text-muted'
-                        }`}
-                      >
-                        {m.criticality}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
         </div>
 
         {/* ────────── Sidebar (right, 1/3) ────────── */}
         <div className="space-y-5 lg:sticky lg:top-6">
-
-          {/* Actions */}
-          <div className="card p-5">
-            <SectionLabel>Actions</SectionLabel>
-
-            {/* Community actions */}
-            <div className="space-y-2">
-              <button className="w-full btn-primary text-sm justify-center" disabled>
-                Run Experiment
-              </button>
-              <button className="w-full btn-secondary text-sm justify-center" disabled>
-                Add to My Lab
-              </button>
-              <button className="w-full btn-secondary text-sm justify-center" disabled>
-                Review Experiment
-              </button>
-              {(canFork || design.status === 'published') && (
-                <button
-                  onClick={canFork ? () => setShowForkModal(true) : undefined}
-                  disabled={!canFork}
-                  className="w-full btn-secondary text-sm justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Fork
-                </button>
-              )}
-            </div>
-
-            {/* Owner-only actions */}
-            {isAuthor && (
-              <>
-                <div className="my-4 border-t border-surface-2" />
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-3">
-                  Owner
-                </p>
-                <div className="space-y-2">
-                  {canEdit && (
-                    <Link
-                      to={`/designs/${id}/edit`}
-                      className="block w-full btn-secondary text-sm text-center justify-center"
-                    >
-                      Edit
-                    </Link>
-                  )}
-                  {canPublish && (
-                    <button
-                      onClick={handlePublish}
-                      disabled={publishing}
-                      className="w-full btn-primary text-sm justify-center disabled:opacity-50"
-                    >
-                      {publishing ? 'Publishing…' : 'Publish'}
-                    </button>
-                  )}
-                  <button className="w-full btn-secondary text-sm justify-center" disabled>
-                    View Reviews
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
 
           {/* About */}
           <div className="card p-5">
@@ -472,17 +463,70 @@ export default function DesignDetail() {
             </dl>
           </div>
 
+          {/* Actions */}
+          <div className="card p-5">
+            <SectionLabel>Actions</SectionLabel>
+
+            {/* Community actions */}
+            <div className="space-y-2">
+              <button className="w-full btn-primary text-sm justify-center" disabled>
+                Run Experiment
+              </button>
+              <button className="w-full btn-secondary text-sm justify-center" disabled>
+                Add to My Lab
+              </button>
+              <button className="w-full btn-secondary text-sm justify-center" disabled>
+                Review Experiment
+              </button>
+              {(canFork || design.status === 'published') && (
+                <button
+                  onClick={canFork ? () => setShowForkModal(true) : undefined}
+                  disabled={!canFork}
+                  className="w-full btn-secondary text-sm justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Fork
+                </button>
+              )}
+            </div>
+
+            {/* Owner-only actions */}
+            {isAuthor && (
+              <>
+                <div className="my-4 border-t border-surface-2" />
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-3">
+                  Owner
+                </p>
+                <div className="space-y-2">
+                  {canEdit && (
+                    <Link
+                      to={`/designs/${id}/edit`}
+                      className="block w-full btn-secondary text-sm text-center justify-center"
+                    >
+                      Edit
+                    </Link>
+                  )}
+                  {canPublish && (
+                    <button
+                      onClick={handlePublish}
+                      disabled={publishing}
+                      className="w-full btn-primary text-sm justify-center disabled:opacity-50"
+                    >
+                      {publishing ? 'Publishing…' : 'Publish'}
+                    </button>
+                  )}
+                  <button className="w-full btn-secondary text-sm justify-center" disabled>
+                    View Reviews
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Additional details */}
           {hasSidebarDetails && (
             <div className="card p-5">
               <SectionLabel>Additional Details</SectionLabel>
               <div className="space-y-4 text-sm">
-                {design.hypothesis && (
-                  <div>
-                    <p className="text-xs font-semibold text-muted mb-1">Hypothesis</p>
-                    <p className="text-gray-800 leading-relaxed">{design.hypothesis}</p>
-                  </div>
-                )}
                 {design.safety_considerations && (
                   <div>
                     <p className="text-xs font-semibold text-muted mb-1">Safety</p>
@@ -529,9 +573,9 @@ export default function DesignDetail() {
                         <li key={refId}>
                           <Link
                             to={`/designs/${refId}`}
-                            className="text-primary hover:underline text-xs font-mono"
+                            className="text-primary hover:underline text-sm"
                           >
-                            {refId}
+                            {refTitleMap[refId] ?? refId}
                           </Link>
                         </li>
                       ))}
@@ -600,6 +644,15 @@ export default function DesignDetail() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Material detail modal */}
+      {selectedMaterial && (
+        <MaterialDetailModal
+          material={selectedMaterial}
+          onClose={() => setSelectedMaterial(null)}
+          inLab={false}
+        />
       )}
     </div>
   )
