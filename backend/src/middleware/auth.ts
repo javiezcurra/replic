@@ -37,7 +37,7 @@ export async function requireAuth(
  */
 export async function optionalAuth(
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ): Promise<void> {
   const authHeader = req.headers.authorization

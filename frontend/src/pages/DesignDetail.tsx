@@ -122,6 +122,9 @@ export default function DesignDetail() {
     )
   }
 
+  // Narrow the type — all null/error states are handled above.
+  if (!design) return null
+
   const isAuthor  = user ? design.author_ids.includes(user.uid) : false
   const canPublish = isAuthor && design.status === 'draft'
   const canEdit    = isAuthor && design.status !== 'locked'
