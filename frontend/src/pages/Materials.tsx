@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext'
 import type { Material, MaterialCategory, MaterialListResponse } from '../types/material'
 import BulkUploadMaterialsModal from '../components/BulkUploadMaterialsModal'
 
+const PAGE_SIZE = 50
+
 const CATEGORIES: { value: MaterialCategory; label: string; emoji: string }[] = [
   { value: 'glassware',  label: 'Glassware',   emoji: '🫙' },
   { value: 'reagent',    label: 'Reagent',     emoji: '⚗️' },
@@ -15,28 +17,73 @@ const CATEGORIES: { value: MaterialCategory; label: string; emoji: string }[] = 
 
 export default function Materials() {
   const { user } = useAuth()
-  const [all, setAll] = useState<Material[]>([])
+
+  // Raw data fetched from the API, split by type
+  const [equipmentAll, setEquipmentAll] = useState<Material[]>([])
+  const [consumablesAll, setConsumablesAll] = useState<Material[]>([])
+  const [equipmentCursor, setEquipmentCursor] = useState<string | undefined>()
+  const [consumablesCursor, setConsumablesCursor] = useState<string | undefined>()
+
   const [loading, setLoading] = useState(true)
-  const [category, setCategory] = useState('')
+  const [loadingMoreEq, setLoadingMoreEq] = useState(false)
+  const [loadingMoreCon, setLoadingMoreCon] = useState(false)
+
+  // Category filter is applied client-side to the already-fetched data
+  const [category, setCategory] = useState<MaterialCategory | ''>('')
   const [showBulkUpload, setShowBulkUpload] = useState(false)
 
-  async function fetchMaterials() {
+  // Equipment and Consumables are fetched in separate parallel API calls using
+  // ?type= so that a one-type-dominated result set can't starve the other section.
+  // Category filtering is then applied client-side for instant, reliable results.
+  async function fetchAll() {
     setLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (category) params.set('category', category)
-      const qs = params.toString()
-      const res = await api.get<MaterialListResponse>(`/api/materials${qs ? `?${qs}` : ''}`)
-      setAll(res.data)
+      const [eqRes, conRes] = await Promise.all([
+        api.get<MaterialListResponse>(`/api/materials?type=Equipment&limit=${PAGE_SIZE}`),
+        api.get<MaterialListResponse>(`/api/materials?type=Consumable&limit=${PAGE_SIZE}`),
+      ])
+      setEquipmentAll(eqRes.data)
+      setConsumablesAll(conRes.data)
+      setEquipmentCursor(eqRes.data.length === PAGE_SIZE ? eqRes.data[eqRes.data.length - 1]?.id : undefined)
+      setConsumablesCursor(conRes.data.length === PAGE_SIZE ? conRes.data[conRes.data.length - 1]?.id : undefined)
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchMaterials() }, [category])  // eslint-disable-line react-hooks/exhaustive-deps
+  async function loadMoreEquipment() {
+    if (!equipmentCursor) return
+    setLoadingMoreEq(true)
+    try {
+      const res = await api.get<MaterialListResponse>(
+        `/api/materials?type=Equipment&limit=${PAGE_SIZE}&after=${equipmentCursor}`
+      )
+      setEquipmentAll(prev => [...prev, ...res.data])
+      setEquipmentCursor(res.data.length === PAGE_SIZE ? res.data[res.data.length - 1]?.id : undefined)
+    } finally {
+      setLoadingMoreEq(false)
+    }
+  }
 
-  const equipment   = all.filter(m => m.type === 'Equipment')
-  const consumables = all.filter(m => m.type === 'Consumable')
+  async function loadMoreConsumables() {
+    if (!consumablesCursor) return
+    setLoadingMoreCon(true)
+    try {
+      const res = await api.get<MaterialListResponse>(
+        `/api/materials?type=Consumable&limit=${PAGE_SIZE}&after=${consumablesCursor}`
+      )
+      setConsumablesAll(prev => [...prev, ...res.data])
+      setConsumablesCursor(res.data.length === PAGE_SIZE ? res.data[res.data.length - 1]?.id : undefined)
+    } finally {
+      setLoadingMoreCon(false)
+    }
+  }
+
+  useEffect(() => { fetchAll() }, [])
+
+  // Client-side category filter — instant, no re-fetch required
+  const equipment   = category ? equipmentAll.filter(m => m.category === category)   : equipmentAll
+  const consumables = category ? consumablesAll.filter(m => m.category === category) : consumablesAll
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-surface)' }}>
@@ -86,7 +133,7 @@ export default function Materials() {
           )}
         </div>
 
-        {/* ── Category pill filters ── */}
+        {/* ── Category pills — client-side filter ── */}
         <div className="mt-6 flex flex-wrap gap-2">
           <CategoryPill label="All" active={category === ''} onClick={() => setCategory('')} />
           {CATEGORIES.map(c => (
@@ -99,7 +146,7 @@ export default function Materials() {
           ))}
         </div>
 
-        {/* ── Mobile jump links (hidden on lg+) ── */}
+        {/* ── Mobile jump links ── */}
         <div className="mt-4 flex gap-3 lg:hidden">
           <a
             href="#section-equipment"
@@ -139,7 +186,10 @@ export default function Materials() {
               bannerBg="var(--color-dark)"
               accentColor="var(--color-primary)"
               materials={equipment}
-              emptyMsg="No equipment here yet. Your lab feels a little sparse."
+              hasMore={!!equipmentCursor}
+              loadingMore={loadingMoreEq}
+              onLoadMore={loadMoreEquipment}
+              emptyMsg={category ? `No equipment in the ${CATEGORIES.find(c=>c.value===category)?.label ?? category} category.` : 'No equipment here yet. Your lab feels a little sparse.'}
               emptyEmoji="🔬"
             />
             <MaterialsSection
@@ -150,7 +200,10 @@ export default function Materials() {
               bannerBg="var(--color-primary)"
               accentColor="var(--color-dark)"
               materials={consumables}
-              emptyMsg="No consumables yet. Stock up — science is thirsty."
+              hasMore={!!consumablesCursor}
+              loadingMore={loadingMoreCon}
+              onLoadMore={loadMoreConsumables}
+              emptyMsg={category ? `No consumables in the ${CATEGORIES.find(c=>c.value===category)?.label ?? category} category.` : 'No consumables yet. Stock up — science is thirsty.'}
               emptyEmoji="🧪"
             />
           </div>
@@ -160,7 +213,7 @@ export default function Materials() {
       {showBulkUpload && (
         <BulkUploadMaterialsModal
           onClose={() => setShowBulkUpload(false)}
-          onComplete={() => { setShowBulkUpload(false); fetchMaterials() }}
+          onComplete={() => { setShowBulkUpload(false); fetchAll() }}
         />
       )}
     </div>
@@ -191,6 +244,9 @@ function MaterialsSection({
   bannerBg,
   accentColor,
   materials,
+  hasMore,
+  loadingMore,
+  onLoadMore,
   emptyMsg,
   emptyEmoji,
 }: {
@@ -201,6 +257,9 @@ function MaterialsSection({
   bannerBg: string
   accentColor: string
   materials: Material[]
+  hasMore: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
   emptyMsg: string
   emptyEmoji: string
 }) {
@@ -236,18 +295,33 @@ function MaterialsSection({
         </span>
       </div>
 
-      {/* Card list */}
       {materials.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
           <div className="text-5xl mb-3">{emptyEmoji}</div>
           <p className="text-muted text-sm">{emptyMsg}</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {materials.map(m => (
-            <MaterialCard key={m.id} material={m} accentColor={accentColor} />
-          ))}
-        </div>
+        <>
+          <div className="space-y-2">
+            {materials.map(m => (
+              <MaterialCard key={m.id} material={m} accentColor={accentColor} />
+            ))}
+          </div>
+
+          {hasMore && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={onLoadMore}
+                disabled={loadingMore}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium
+                           border-2 border-surface-2 bg-white text-ink hover:border-ink
+                           transition-all disabled:opacity-50"
+              >
+                {loadingMore ? 'Loading…' : 'Load more'}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
