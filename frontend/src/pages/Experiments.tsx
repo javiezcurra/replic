@@ -29,8 +29,8 @@ export default function Experiments() {
     setLoading(true)
     try {
       const res = await api.get<DesignListResponse>(buildQuery())
-      setDesigns(res.designs)
-      setCursor(res.cursor)
+      setDesigns(res.data)
+      setCursor(res.data.length === 20 ? res.data[res.data.length - 1]?.id : undefined)
     } finally {
       setLoading(false)
     }
@@ -41,8 +41,8 @@ export default function Experiments() {
     setLoadingMore(true)
     try {
       const res = await api.get<DesignListResponse>(buildQuery(cursor))
-      setDesigns((prev) => [...prev, ...res.designs])
-      setCursor(res.cursor)
+      setDesigns((prev) => [...prev, ...res.data])
+      setCursor(res.data.length === 20 ? res.data[res.data.length - 1]?.id : undefined)
     } finally {
       setLoadingMore(false)
     }

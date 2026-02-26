@@ -20,8 +20,8 @@ export default function MyDesigns() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.get<{ designs: Design[] }>('/api/designs/me/list')
-      .then((res) => setDesigns(res.designs))
+    api.get<{ status: string; data: Design[] }>('/api/designs/me/list')
+      .then((res) => setDesigns(res.data))
       .finally(() => setLoading(false))
   }, [])
 
