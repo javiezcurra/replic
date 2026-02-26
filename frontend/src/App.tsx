@@ -9,6 +9,8 @@ import MyDesigns from './pages/MyDesigns'
 import CreateDesign from './pages/CreateDesign'
 import EditDesign from './pages/EditDesign'
 import DesignDetail from './pages/DesignDetail'
+import Materials from './pages/Materials'
+import MaterialDetail from './pages/MaterialDetail'
 
 export default function App() {
   return (
@@ -18,6 +20,8 @@ export default function App() {
         <Route index element={<Home />} />
         <Route path="experiments" element={<Experiments />} />
         <Route path="designs/:id" element={<DesignDetail />} />
+        <Route path="materials" element={<Materials />} />
+        <Route path="materials/:id" element={<MaterialDetail />} />
 
         {/* Protected */}
         <Route element={<PrivateRoute />}>

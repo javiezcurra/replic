@@ -1,0 +1,27 @@
+export type MaterialType = 'Consumable' | 'Equipment'
+
+export type MaterialCategory = 'glassware' | 'reagent' | 'equipment' | 'biological' | 'other'
+
+export interface Material {
+  id: string
+  name: string
+  type: MaterialType
+  description?: string
+  category: MaterialCategory
+  link?: string
+  supplier?: string
+  unit: string
+  typical_cost_usd?: number
+  safety_notes?: string
+  tags: string[]
+  is_verified: boolean
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface MaterialListResponse {
+  status: string
+  data: Material[]
+  count: number
+}
