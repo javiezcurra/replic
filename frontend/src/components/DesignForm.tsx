@@ -617,24 +617,23 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
       </div>
 
       {/* ── Advanced Details (collapsible) ────────────────────────────────── */}
-      <div className="border border-gray-200 rounded-xl overflow-hidden">
+      <div>
         <button
           type="button"
           onClick={() => setAdvancedOpen((o) => !o)}
-          className="w-full flex items-center justify-between px-5 py-3.5
-                     bg-gray-50 hover:bg-gray-100 transition-colors text-sm font-medium text-gray-700"
+          className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-widest mt-5 hover:text-gray-600 transition-colors"
         >
           Advanced Details
           <svg
-            className={`w-4 h-4 text-gray-400 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+            className={`w-3 h-3 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
             fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
 
         {advancedOpen && (
-          <div className="px-5 py-5 space-y-5 border-t border-gray-200">
+          <div className="space-y-5 mt-3">
 
             {/* ── Attribution ─────────────────────────────────────────────── */}
             <SubHeader>Attribution</SubHeader>
