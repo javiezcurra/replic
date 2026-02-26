@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
 import type { Material, MaterialCategory, MaterialListResponse } from '../types/material'
 
 const CATEGORY_OPTIONS: { value: MaterialCategory; label: string }[] = [
@@ -12,6 +13,7 @@ const CATEGORY_OPTIONS: { value: MaterialCategory; label: string }[] = [
 ]
 
 export default function Materials() {
+  const { user } = useAuth()
   const [materials, setMaterials] = useState<Material[]>([])
   const [cursor, setCursor] = useState<string | undefined>()
   const [loading, setLoading] = useState(true)
@@ -55,9 +57,16 @@ export default function Materials() {
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Materials</h1>
-        <p className="mt-2 text-gray-600">Browse the catalog of consumables and equipment used in experiment designs.</p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Materials</h1>
+          <p className="mt-2 text-gray-600">Browse the catalog of consumables and equipment used in experiment designs.</p>
+        </div>
+        {user && (
+          <Link to="/materials/new" className="btn-primary text-sm shrink-0">
+            Submit material
+          </Link>
+        )}
       </div>
 
       {/* Filters */}
