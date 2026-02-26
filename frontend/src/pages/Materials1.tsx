@@ -11,6 +11,8 @@ import { useAuth } from '../contexts/AuthContext'
 import type { Material, MaterialCategory, MaterialListResponse } from '../types/material'
 import BulkUploadMaterialsModal from '../components/BulkUploadMaterialsModal'
 
+const PAGE_SIZE = 50
+
 const CATEGORIES: { value: MaterialCategory; label: string }[] = [
   { value: 'glassware',  label: 'Glassware' },
   { value: 'reagent',    label: 'Reagent' },
@@ -29,28 +31,56 @@ const CATEGORY_COLORS: Record<MaterialCategory, string> = {
 
 export default function Materials1() {
   const { user } = useAuth()
-  const [all, setAll] = useState<Material[]>([])
+  const [equipmentAll, setEquipmentAll] = useState<Material[]>([])
+  const [consumablesAll, setConsumablesAll] = useState<Material[]>([])
+  const [eqCursor, setEqCursor] = useState<string | undefined>()
+  const [conCursor, setConCursor] = useState<string | undefined>()
   const [loading, setLoading] = useState(true)
-  const [category, setCategory] = useState<string>('')
+  const [loadingMoreEq, setLoadingMoreEq] = useState(false)
+  const [loadingMoreCon, setLoadingMoreCon] = useState(false)
+  const [category, setCategory] = useState<MaterialCategory | ''>('')
   const [showBulk, setShowBulk] = useState(false)
 
   async function fetch() {
     setLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (category) params.set('category', category)
-      const qs = params.toString()
-      const res = await api.get<MaterialListResponse>(`/api/materials${qs ? `?${qs}` : ''}`)
-      setAll(res.data)
+      const [eqRes, conRes] = await Promise.all([
+        api.get<MaterialListResponse>(`/api/materials?type=Equipment&limit=${PAGE_SIZE}`),
+        api.get<MaterialListResponse>(`/api/materials?type=Consumable&limit=${PAGE_SIZE}`),
+      ])
+      setEquipmentAll(eqRes.data)
+      setConsumablesAll(conRes.data)
+      setEqCursor(eqRes.data.length === PAGE_SIZE ? eqRes.data[eqRes.data.length - 1]?.id : undefined)
+      setConCursor(conRes.data.length === PAGE_SIZE ? conRes.data[conRes.data.length - 1]?.id : undefined)
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetch() }, [category])  // eslint-disable-line react-hooks/exhaustive-deps
+  async function loadMoreEq() {
+    if (!eqCursor) return
+    setLoadingMoreEq(true)
+    try {
+      const res = await api.get<MaterialListResponse>(`/api/materials?type=Equipment&limit=${PAGE_SIZE}&after=${eqCursor}`)
+      setEquipmentAll(prev => [...prev, ...res.data])
+      setEqCursor(res.data.length === PAGE_SIZE ? res.data[res.data.length - 1]?.id : undefined)
+    } finally { setLoadingMoreEq(false) }
+  }
 
-  const equipment   = all.filter(m => m.type === 'Equipment')
-  const consumables = all.filter(m => m.type === 'Consumable')
+  async function loadMoreCon() {
+    if (!conCursor) return
+    setLoadingMoreCon(true)
+    try {
+      const res = await api.get<MaterialListResponse>(`/api/materials?type=Consumable&limit=${PAGE_SIZE}&after=${conCursor}`)
+      setConsumablesAll(prev => [...prev, ...res.data])
+      setConCursor(res.data.length === PAGE_SIZE ? res.data[res.data.length - 1]?.id : undefined)
+    } finally { setLoadingMoreCon(false) }
+  }
+
+  useEffect(() => { fetch() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const equipment   = category ? equipmentAll.filter(m => m.category === category)   : equipmentAll
+  const consumables = category ? consumablesAll.filter(m => m.category === category) : consumablesAll
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-surface)' }}>
@@ -131,6 +161,9 @@ export default function Materials1() {
               count={equipment.length}
               accent="#2F1847"
               materials={equipment}
+              hasMore={!!eqCursor}
+              loadingMore={loadingMoreEq}
+              onLoadMore={loadMoreEq}
               emptyText="No equipment matches your filters."
             />
             {/* Consumables */}
@@ -139,6 +172,9 @@ export default function Materials1() {
               count={consumables.length}
               accent="#C1502D"
               materials={consumables}
+              hasMore={!!conCursor}
+              loadingMore={loadingMoreCon}
+              onLoadMore={loadMoreCon}
               emptyText="No consumables match your filters."
             />
           </div>
@@ -148,7 +184,7 @@ export default function Materials1() {
       {showBulk && (
         <BulkUploadMaterialsModal
           onClose={() => setShowBulk(false)}
-          onComplete={() => { setShowBulk(false); fetch() }}
+          onComplete={() => { setShowBulk(false); fetch() }}  // eslint-disable-line react-hooks/exhaustive-deps
         />
       )}
     </div>
@@ -160,12 +196,18 @@ function Section({
   count,
   accent,
   materials,
+  hasMore,
+  loadingMore,
+  onLoadMore,
   emptyText,
 }: {
   title: string
   count: number
   accent: string
   materials: Material[]
+  hasMore: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
   emptyText: string
 }) {
   return (
@@ -192,9 +234,22 @@ function Section({
       {materials.length === 0 ? (
         <p className="text-sm text-muted py-8 text-center">{emptyText}</p>
       ) : (
-        <div className="space-y-2">
-          {materials.map(m => <MaterialCard1 key={m.id} material={m} />)}
-        </div>
+        <>
+          <div className="space-y-2">
+            {materials.map(m => <MaterialCard1 key={m.id} material={m} />)}
+          </div>
+          {hasMore && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={onLoadMore}
+                disabled={loadingMore}
+                className="btn-secondary text-sm disabled:opacity-50"
+              >
+                {loadingMore ? 'Loading…' : 'Load more'}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
