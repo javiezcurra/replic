@@ -144,49 +144,12 @@ export default function DesignDetail() {
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
-      {/* Hypothesis */}
-      <section className="card p-5 mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Hypothesis</h2>
-        <p className="text-gray-800">{design.hypothesis}</p>
-      </section>
-
-      {/* Research questions */}
-      {design.research_questions.length > 0 && (
+      {/* Summary */}
+      {design.summary && (
         <section className="card p-5 mb-4">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Research Questions</h2>
-          <ol className="list-decimal list-inside space-y-2">
-            {design.research_questions.map((q) => (
-              <li key={q.id} className="text-gray-800">
-                {q.question}
-                <span className="ml-2 text-xs text-gray-400">({q.expected_data_type})</span>
-              </li>
-            ))}
-          </ol>
+          <p className="text-gray-700 leading-relaxed">{design.summary}</p>
         </section>
       )}
-
-      {/* Variables */}
-      <section className="card p-5 mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Variables</h2>
-        {[
-          { label: 'Independent', vars: design.independent_variables },
-          { label: 'Dependent', vars: design.dependent_variables },
-          { label: 'Controlled', vars: design.controlled_variables },
-        ].map(({ label, vars }) => vars.length > 0 && (
-          <div key={label} className="mb-3">
-            <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
-            <ul className="space-y-1">
-              {vars.map((v, i) => (
-                <li key={i} className="text-sm text-gray-800">
-                  <span className="font-medium">{v.name}</span>
-                  <span className="text-gray-400"> — {v.type}, {v.values_or_range}</span>
-                  {v.units && <span className="text-gray-400"> ({v.units})</span>}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </section>
 
       {/* Steps */}
       {design.steps.length > 0 && (
@@ -205,8 +168,70 @@ export default function DesignDetail() {
         </section>
       )}
 
-      {/* Optional details */}
-      {(design.sample_size || design.analysis_plan || design.ethical_considerations) && (
+      {/* Outcomes / Research questions */}
+      {design.research_questions.length > 0 && (
+        <section className="card p-5 mb-4">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Outcomes / Research Questions</h2>
+          <ol className="list-decimal list-inside space-y-2">
+            {design.research_questions.map((q) => (
+              <li key={q.id} className="text-gray-800">
+                {q.question}
+                <span className="ml-2 text-xs text-gray-400">({q.expected_data_type})</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {/* Safety considerations */}
+      {design.safety_considerations && (
+        <section className="card p-5 mb-4">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Safety Considerations</h2>
+          <p className="text-sm text-gray-800 whitespace-pre-line">{design.safety_considerations}</p>
+        </section>
+      )}
+
+      {/* Hypothesis */}
+      {design.hypothesis && (
+        <section className="card p-5 mb-4">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Hypothesis</h2>
+          <p className="text-gray-800">{design.hypothesis}</p>
+        </section>
+      )}
+
+      {/* Variables */}
+      {(
+        (design.independent_variables?.length ?? 0) > 0 ||
+        (design.dependent_variables?.length ?? 0) > 0 ||
+        (design.controlled_variables?.length ?? 0) > 0
+      ) && (
+        <section className="card p-5 mb-4">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Variables</h2>
+          {[
+            { label: 'Independent', vars: design.independent_variables ?? [] },
+            { label: 'Dependent', vars: design.dependent_variables ?? [] },
+            { label: 'Controlled', vars: design.controlled_variables ?? [] },
+          ].map(({ label, vars }) => vars.length > 0 && (
+            <div key={label} className="mb-3">
+              <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
+              <ul className="space-y-1">
+                {vars.map((v, i) => (
+                  <li key={i} className="text-sm text-gray-800">
+                    <span className="font-medium">{v.name}</span>
+                    <span className="text-gray-400"> — {v.type}, {v.values_or_range}</span>
+                    {v.units && <span className="text-gray-400"> ({v.units})</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* Optional advanced details */}
+      {(design.sample_size || design.analysis_plan || design.ethical_considerations ||
+        design.disclaimers || design.seeking_collaborators ||
+        (design.reference_experiment_ids?.length ?? 0) > 0) && (
         <section className="card p-5 mb-4 space-y-3">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Additional Details</h2>
           {design.sample_size && (
@@ -224,12 +249,30 @@ export default function DesignDetail() {
               <p className="text-sm text-gray-800 whitespace-pre-line">{design.ethical_considerations}</p>
             </div>
           )}
+          {design.disclaimers && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-1">Disclaimers</p>
+              <p className="text-sm text-gray-800 whitespace-pre-line">{design.disclaimers}</p>
+            </div>
+          )}
           {design.seeking_collaborators && (
             <div>
               <span className="inline-block text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">Seeking collaborators</span>
               {design.collaboration_notes && (
                 <p className="mt-1 text-sm text-gray-800">{design.collaboration_notes}</p>
               )}
+            </div>
+          )}
+          {(design.reference_experiment_ids?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-1">Reference Experiments</p>
+              <ul className="list-disc list-inside space-y-1">
+                {design.reference_experiment_ids.map((id) => (
+                  <li key={id} className="text-sm">
+                    <Link to={`/designs/${id}`} className="text-brand-600 hover:underline">{id}</Link>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </section>

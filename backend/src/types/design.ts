@@ -93,7 +93,8 @@ export interface Design {
 
   // Core required fields
   title: string
-  hypothesis: string
+  summary: string
+  hypothesis?: string
   discipline_tags: string[]           // max 5
   difficulty_level: DifficultyLevel
 
@@ -106,6 +107,8 @@ export interface Design {
   controlled_variables: Variable[]
 
   // Optional advanced fields
+  safety_considerations?: string
+  reference_experiment_ids: string[]
   parent_designs: string[]
   references: DesignReference[]
   sample_size?: number
@@ -116,6 +119,7 @@ export interface Design {
   estimated_budget_usd?: number
   safety_requirements?: SafetyRequirements
   ethical_considerations?: string
+  disclaimers?: string
   seeking_collaborators: boolean
   collaboration_notes?: string
 
@@ -139,16 +143,19 @@ export interface Design {
 
 export interface CreateDesignBody {
   title: string
-  hypothesis: string
+  summary: string
   discipline_tags: string[]
   difficulty_level: DifficultyLevel
+  materials: DesignMaterial[]
   steps: DesignStep[]
   research_questions: ResearchQuestion[]
-  independent_variables: Variable[]
-  dependent_variables: Variable[]
-  controlled_variables: Variable[]
   // Optional
-  materials?: DesignMaterial[]
+  hypothesis?: string
+  independent_variables?: Variable[]
+  dependent_variables?: Variable[]
+  controlled_variables?: Variable[]
+  safety_considerations?: string
+  reference_experiment_ids?: string[]
   parent_designs?: string[]
   references?: DesignReference[]
   sample_size?: number
@@ -159,6 +166,7 @@ export interface CreateDesignBody {
   estimated_budget_usd?: number
   safety_requirements?: SafetyRequirements
   ethical_considerations?: string
+  disclaimers?: string
   seeking_collaborators?: boolean
   collaboration_notes?: string
 }

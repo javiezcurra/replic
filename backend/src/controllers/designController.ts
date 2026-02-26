@@ -65,22 +65,19 @@ function forbidden(message: string): AppError {
 function validateCreate(body: CreateDesignBody): string | null {
   if (!body.title?.trim()) return 'title is required'
   if (body.title.length > 200) return 'title must be 200 characters or fewer'
-  if (!body.hypothesis?.trim()) return 'hypothesis is required'
+  if (!body.summary?.trim()) return 'summary is required'
+  if (body.summary.length > 1000) return 'summary must be 1000 characters or fewer'
   if (!Array.isArray(body.discipline_tags) || body.discipline_tags.length === 0)
     return 'at least one discipline_tag is required'
   if (body.discipline_tags.length > 5) return 'discipline_tags cannot exceed 5'
   if (!body.difficulty_level || !DIFFICULTY_LEVELS.includes(body.difficulty_level))
     return `difficulty_level must be one of: ${DIFFICULTY_LEVELS.join(', ')}`
+  if (!Array.isArray(body.materials) || body.materials.length === 0)
+    return 'at least one material is required'
   if (!Array.isArray(body.steps) || body.steps.length === 0)
     return 'at least one step is required'
   if (!Array.isArray(body.research_questions) || body.research_questions.length === 0)
     return 'at least one research_question is required'
-  if (!Array.isArray(body.independent_variables))
-    return 'independent_variables must be an array'
-  if (!Array.isArray(body.dependent_variables))
-    return 'dependent_variables must be an array'
-  if (!Array.isArray(body.controlled_variables))
-    return 'controlled_variables must be an array'
   return null
 }
 
@@ -107,15 +104,18 @@ export async function createDesign(
     const design = {
       id: docRef.id,
       title: body.title.trim(),
-      hypothesis: body.hypothesis.trim(),
+      summary: body.summary.trim(),
+      hypothesis: body.hypothesis?.trim() ?? '',
       discipline_tags: body.discipline_tags,
       difficulty_level: body.difficulty_level,
+      materials: body.materials,
       steps: body.steps,
-      materials: body.materials ?? [],
       research_questions,
-      independent_variables: body.independent_variables,
-      dependent_variables: body.dependent_variables,
-      controlled_variables: body.controlled_variables,
+      independent_variables: body.independent_variables ?? [],
+      dependent_variables: body.dependent_variables ?? [],
+      controlled_variables: body.controlled_variables ?? [],
+      safety_considerations: body.safety_considerations ?? '',
+      reference_experiment_ids: body.reference_experiment_ids ?? [],
       parent_designs: body.parent_designs ?? [],
       references: body.references ?? [],
       sample_size: body.sample_size,
@@ -126,6 +126,7 @@ export async function createDesign(
       estimated_budget_usd: body.estimated_budget_usd,
       safety_requirements: body.safety_requirements,
       ethical_considerations: body.ethical_considerations,
+      disclaimers: body.disclaimers ?? '',
       seeking_collaborators: body.seeking_collaborators ?? false,
       collaboration_notes: body.collaboration_notes,
       // System-managed

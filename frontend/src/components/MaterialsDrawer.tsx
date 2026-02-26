@@ -1,25 +1,31 @@
 /**
  * MaterialsDrawer — slides in from the right, showing all system materials.
  * Users can search, filter by category, and add/remove materials from their lab.
+ * When `onMaterialCreated` is provided, a "Submit Material" button is shown that
+ * opens the CreateMaterialModal and auto-adds the newly created material.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api'
 import type { Material, MaterialCategory, MaterialListResponse } from '../types/material'
 import MaterialCard from './MaterialCard'
 import MaterialDetailModal from './MaterialDetailModal'
+import CreateMaterialModal from './CreateMaterialModal'
 import { useCategories } from '../hooks/useCategories'
 
 interface Props {
-  /** Set of material IDs currently in the user's lab */
+  /** Set of material IDs currently selected (lab or design) */
   labIds: Set<string>
   /** Set of material IDs with a pending add/remove in flight */
   pendingIds: Set<string>
   onAdd: (material: Material) => void
   onRemove: (material: Material) => void
   onClose: () => void
+  /** When provided, shows a "Submit Material" button that opens the create modal.
+   *  Called after the new material is created (in addition to onAdd). */
+  onMaterialCreated?: (material: Material) => void
 }
 
-export default function MaterialsDrawer({ labIds, pendingIds, onAdd, onRemove, onClose }: Props) {
+export default function MaterialsDrawer({ labIds, pendingIds, onAdd, onRemove, onClose, onMaterialCreated }: Props) {
   const { categories: allCategories } = useCategories()
   const [equipmentAll, setEquipmentAll] = useState<Material[]>([])
   const [consumablesAll, setConsumablesAll] = useState<Material[]>([])
@@ -27,6 +33,7 @@ export default function MaterialsDrawer({ labIds, pendingIds, onAdd, onRemove, o
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<MaterialCategory | ''>('')
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   // Load all materials once on mount
   useEffect(() => {
@@ -44,11 +51,21 @@ export default function MaterialsDrawer({ labIds, pendingIds, onAdd, onRemove, o
   // Close on Escape
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !selectedMaterial) onClose()
+      if (e.key === 'Escape' && !selectedMaterial && !showCreateModal) onClose()
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [onClose, selectedMaterial])
+  }, [onClose, selectedMaterial, showCreateModal])
+
+  function handleMaterialCreated(m: Material) {
+    // Add to local list so it appears in results
+    if (m.type === 'Equipment') setEquipmentAll((prev) => [m, ...prev])
+    else setConsumablesAll((prev) => [m, ...prev])
+    // Auto-select it
+    onAdd(m)
+    onMaterialCreated?.(m)
+    setShowCreateModal(false)
+  }
 
   // Client-side search (name, description, tags) + category filter
   function matches(m: Material): boolean {
@@ -105,16 +122,28 @@ export default function MaterialsDrawer({ labIds, pendingIds, onAdd, onRemove, o
               Browse and add materials to your lab
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted
-                       hover:bg-gray-100 hover:text-ink transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {onMaterialCreated !== undefined && (
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                           border-2 border-surface-2 text-ink hover:border-plum transition-all"
+              >
+                + Submit Material
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted
+                         hover:bg-gray-100 hover:text-ink transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -199,6 +228,14 @@ export default function MaterialsDrawer({ labIds, pendingIds, onAdd, onRemove, o
           onAdd={onAdd}
           onRemove={onRemove}
           actionPending={pendingIds.has(selectedMaterial.id)}
+        />
+      )}
+
+      {/* Create material modal (above everything) */}
+      {showCreateModal && (
+        <CreateMaterialModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={handleMaterialCreated}
         />
       )}
     </>

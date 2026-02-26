@@ -21,6 +21,14 @@ export interface DesignStep {
   safety_notes?: string
 }
 
+export interface DesignMaterial {
+  material_id: string
+  quantity: string
+  alternatives_allowed: boolean
+  criticality: Criticality
+  usage_notes?: string
+}
+
 export interface ResearchQuestion {
   id: string
   question: string
@@ -46,14 +54,18 @@ export interface ForkMetadata {
 export interface Design {
   id: string
   title: string
-  hypothesis: string
+  summary: string
+  hypothesis?: string
   discipline_tags: string[]
   difficulty_level: DifficultyLevel
+  materials: DesignMaterial[]
   steps: DesignStep[]
   research_questions: ResearchQuestion[]
   independent_variables: Variable[]
   dependent_variables: Variable[]
   controlled_variables: Variable[]
+  safety_considerations?: string
+  reference_experiment_ids: string[]
   status: DesignStatus
   is_public: boolean
   version: number
@@ -65,6 +77,7 @@ export interface Design {
   sample_size?: number
   analysis_plan?: string
   ethical_considerations?: string
+  disclaimers?: string
   collaboration_notes?: string
   created_at: string
   updated_at: string
@@ -72,19 +85,24 @@ export interface Design {
 
 export interface CreateDesignBody {
   title: string
-  hypothesis: string
+  summary: string
   discipline_tags: string[]
   difficulty_level: DifficultyLevel
+  materials: DesignMaterial[]
   steps: DesignStep[]
   research_questions: ResearchQuestion[]
-  independent_variables: Variable[]
-  dependent_variables: Variable[]
-  controlled_variables: Variable[]
+  hypothesis?: string
+  independent_variables?: Variable[]
+  dependent_variables?: Variable[]
+  controlled_variables?: Variable[]
+  safety_considerations?: string
+  reference_experiment_ids?: string[]
   sample_size?: number
   analysis_plan?: string
   seeking_collaborators?: boolean
   collaboration_notes?: string
   ethical_considerations?: string
+  disclaimers?: string
 }
 
 export type UpdateDesignBody = Partial<CreateDesignBody>
