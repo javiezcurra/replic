@@ -1,9 +1,15 @@
+/**
+ * Materials — Admin Panel page for browsing and managing the full materials catalog.
+ * Only accessible to users with is_admin === true.
+ */
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { Material, MaterialCategory, MaterialListResponse } from '../types/material'
 import BulkUploadMaterialsModal from '../components/BulkUploadMaterialsModal'
+import MaterialCard from '../components/MaterialCard'
+import MaterialDetailModal from '../components/MaterialDetailModal'
 
 const PAGE_SIZE = 50
 
@@ -16,25 +22,19 @@ const CATEGORIES: { value: MaterialCategory; label: string; emoji: string }[] = 
 ]
 
 export default function Materials() {
-  const { user } = useAuth()
+  const { user, isAdmin, loading: authLoading } = useAuth()
 
-  // Raw data fetched from the API, split by type
   const [equipmentAll, setEquipmentAll] = useState<Material[]>([])
   const [consumablesAll, setConsumablesAll] = useState<Material[]>([])
   const [equipmentCursor, setEquipmentCursor] = useState<string | undefined>()
   const [consumablesCursor, setConsumablesCursor] = useState<string | undefined>()
-
   const [loading, setLoading] = useState(true)
   const [loadingMoreEq, setLoadingMoreEq] = useState(false)
   const [loadingMoreCon, setLoadingMoreCon] = useState(false)
-
-  // Category filter is applied client-side to the already-fetched data
   const [category, setCategory] = useState<MaterialCategory | ''>('')
   const [showBulkUpload, setShowBulkUpload] = useState(false)
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
 
-  // Equipment and Consumables are fetched in separate parallel API calls using
-  // ?type= so that a one-type-dominated result set can't starve the other section.
-  // Category filtering is then applied client-side for instant, reliable results.
   async function fetchAll() {
     setLoading(true)
     try {
@@ -56,9 +56,9 @@ export default function Materials() {
     setLoadingMoreEq(true)
     try {
       const res = await api.get<MaterialListResponse>(
-        `/api/materials?type=Equipment&limit=${PAGE_SIZE}&after=${equipmentCursor}`
+        `/api/materials?type=Equipment&limit=${PAGE_SIZE}&after=${equipmentCursor}`,
       )
-      setEquipmentAll(prev => [...prev, ...res.data])
+      setEquipmentAll((prev) => [...prev, ...res.data])
       setEquipmentCursor(res.data.length === PAGE_SIZE ? res.data[res.data.length - 1]?.id : undefined)
     } finally {
       setLoadingMoreEq(false)
@@ -70,28 +70,37 @@ export default function Materials() {
     setLoadingMoreCon(true)
     try {
       const res = await api.get<MaterialListResponse>(
-        `/api/materials?type=Consumable&limit=${PAGE_SIZE}&after=${consumablesCursor}`
+        `/api/materials?type=Consumable&limit=${PAGE_SIZE}&after=${consumablesCursor}`,
       )
-      setConsumablesAll(prev => [...prev, ...res.data])
+      setConsumablesAll((prev) => [...prev, ...res.data])
       setConsumablesCursor(res.data.length === PAGE_SIZE ? res.data[res.data.length - 1]?.id : undefined)
     } finally {
       setLoadingMoreCon(false)
     }
   }
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => {
+    if (isAdmin) fetchAll()
+  }, [isAdmin])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Client-side category filter — instant, no re-fetch required
-  const equipment   = category ? equipmentAll.filter(m => m.category === category)   : equipmentAll
-  const consumables = category ? consumablesAll.filter(m => m.category === category) : consumablesAll
+  // Admin guard — wait for auth to resolve before redirecting
+  if (!authLoading && (!user || !isAdmin)) {
+    return <Navigate to="/" replace />
+  }
+
+  const equipment   = category ? equipmentAll.filter((m) => m.category === category) : equipmentAll
+  const consumables = category ? consumablesAll.filter((m) => m.category === category) : consumablesAll
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-surface)' }}>
 
-      {/* ── Page header ── */}
+      {/* Page header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
+            <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">
+              Admin Panel
+            </p>
             <h1
               className="text-5xl sm:text-6xl text-ink"
               style={{ fontFamily: 'var(--font-display)' }}
@@ -99,44 +108,42 @@ export default function Materials() {
               Materials
             </h1>
             <p className="mt-2 text-lg text-plum max-w-sm">
-              Everything your experiment needs.{' '}
-              <span className="text-muted text-base">No guarantees it fits in the budget.</span>
+              Full catalog.{' '}
+              <span className="text-muted text-base">Only you can see this.</span>
             </p>
           </div>
 
-          {user && (
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => setShowBulkUpload(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl
-                           border-2 border-plum text-plum text-sm font-semibold
-                           hover:bg-plum hover:text-white transition-all"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-                Bulk upload
-              </button>
-              <Link
-                to="/materials/new"
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl
-                           text-sm font-semibold text-white hover:opacity-90 transition-all"
-                style={{ background: 'var(--color-primary)' }}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                </svg>
-                Submit material
-              </Link>
-            </div>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowBulkUpload(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl
+                         border-2 border-plum text-plum text-sm font-semibold
+                         hover:bg-plum hover:text-white transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Bulk upload
+            </button>
+            <Link
+              to="/materials/new"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl
+                         text-sm font-semibold text-white hover:opacity-90 transition-all"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              Submit material
+            </Link>
+          </div>
         </div>
 
-        {/* ── Category pills — client-side filter ── */}
+        {/* Category pills */}
         <div className="mt-6 flex flex-wrap gap-2">
           <CategoryPill label="All" active={category === ''} onClick={() => setCategory('')} />
-          {CATEGORIES.map(c => (
+          {CATEGORIES.map((c) => (
             <CategoryPill
               key={c.value}
               label={`${c.emoji} ${c.label}`}
@@ -146,18 +153,16 @@ export default function Materials() {
           ))}
         </div>
 
-        {/* ── Mobile jump links ── */}
+        {/* Mobile jump links */}
         <div className="mt-4 flex gap-3 lg:hidden">
-          <a
-            href="#section-equipment"
+          <a href="#section-equipment"
             className="inline-flex items-center gap-1 text-sm font-medium text-white
                        px-3 py-1.5 rounded-lg hover:opacity-80 transition-opacity"
             style={{ background: 'var(--color-dark)' }}
           >
             ↓ Equipment
           </a>
-          <a
-            href="#section-consumables"
+          <a href="#section-consumables"
             className="inline-flex items-center gap-1 text-sm font-medium text-white
                        px-3 py-1.5 rounded-lg hover:opacity-80 transition-opacity"
             style={{ background: 'var(--color-primary)' }}
@@ -167,7 +172,7 @@ export default function Materials() {
         </div>
       </div>
 
-      {/* ── Sections ── */}
+      {/* Sections */}
       {loading ? (
         <div className="flex justify-center py-24">
           <div
@@ -184,12 +189,16 @@ export default function Materials() {
               subtitle="The tools that keep on giving."
               icon={<GearIcon />}
               bannerBg="var(--color-dark)"
-              accentColor="var(--color-primary)"
               materials={equipment}
               hasMore={!!equipmentCursor}
               loadingMore={loadingMoreEq}
               onLoadMore={loadMoreEquipment}
-              emptyMsg={category ? `No equipment in the ${CATEGORIES.find(c=>c.value===category)?.label ?? category} category.` : 'No equipment here yet. Your lab feels a little sparse.'}
+              onDetails={setSelectedMaterial}
+              emptyMsg={
+                category
+                  ? `No equipment in the ${CATEGORIES.find((c) => c.value === category)?.label ?? category} category.`
+                  : 'No equipment yet.'
+              }
               emptyEmoji="🔬"
             />
             <MaterialsSection
@@ -198,12 +207,16 @@ export default function Materials() {
               subtitle="Stuff you'll go through faster than you think."
               icon={<FlaskIcon />}
               bannerBg="var(--color-primary)"
-              accentColor="var(--color-dark)"
               materials={consumables}
               hasMore={!!consumablesCursor}
               loadingMore={loadingMoreCon}
               onLoadMore={loadMoreConsumables}
-              emptyMsg={category ? `No consumables in the ${CATEGORIES.find(c=>c.value===category)?.label ?? category} category.` : 'No consumables yet. Stock up — science is thirsty.'}
+              onDetails={setSelectedMaterial}
+              emptyMsg={
+                category
+                  ? `No consumables in the ${CATEGORIES.find((c) => c.value === category)?.label ?? category} category.`
+                  : 'No consumables yet.'
+              }
               emptyEmoji="🧪"
             />
           </div>
@@ -214,6 +227,13 @@ export default function Materials() {
         <BulkUploadMaterialsModal
           onClose={() => setShowBulkUpload(false)}
           onComplete={() => { setShowBulkUpload(false); fetchAll() }}
+        />
+      )}
+
+      {selectedMaterial && (
+        <MaterialDetailModal
+          material={selectedMaterial}
+          onClose={() => setSelectedMaterial(null)}
         />
       )}
     </div>
@@ -242,11 +262,11 @@ function MaterialsSection({
   subtitle,
   icon,
   bannerBg,
-  accentColor,
   materials,
   hasMore,
   loadingMore,
   onLoadMore,
+  onDetails,
   emptyMsg,
   emptyEmoji,
 }: {
@@ -255,17 +275,16 @@ function MaterialsSection({
   subtitle: string
   icon: React.ReactNode
   bannerBg: string
-  accentColor: string
   materials: Material[]
   hasMore: boolean
   loadingMore: boolean
   onLoadMore: () => void
+  onDetails: (m: Material) => void
   emptyMsg: string
   emptyEmoji: string
 }) {
   return (
     <div id={id} className="flex flex-col">
-      {/* Hero banner */}
       <div
         className="rounded-2xl px-6 py-5 flex items-center justify-between gap-4 mb-4"
         style={{ background: bannerBg }}
@@ -303,11 +322,10 @@ function MaterialsSection({
       ) : (
         <>
           <div className="space-y-2">
-            {materials.map(m => (
-              <MaterialCard key={m.id} material={m} accentColor={accentColor} />
+            {materials.map((m) => (
+              <MaterialCard key={m.id} material={m} onDetails={onDetails} />
             ))}
           </div>
-
           {hasMore && (
             <div className="mt-4 text-center">
               <button
@@ -324,66 +342,6 @@ function MaterialsSection({
         </>
       )}
     </div>
-  )
-}
-
-function MaterialCard({ material, accentColor }: { material: Material; accentColor: string }) {
-  const catInfo = CATEGORIES.find(c => c.value === material.category)
-
-  return (
-    <Link
-      to={`/materials/${material.id}`}
-      className="group bg-white rounded-2xl border-2 border-surface-2 px-4 py-3
-                 hover:border-plum hover:shadow-md transition-all flex flex-col gap-2"
-    >
-      <div className="flex items-center justify-between">
-        <span className="flex items-center gap-1 text-xs font-medium text-muted">
-          {catInfo?.emoji} {catInfo?.label ?? material.category}
-        </span>
-        {material.is_verified && (
-          <span className="text-xs font-semibold text-emerald-600">✓ Verified</span>
-        )}
-      </div>
-
-      <p className="font-semibold text-ink text-[15px] leading-snug group-hover:text-primary transition-colors">
-        {material.name}
-      </p>
-
-      {material.description && (
-        <p className="text-sm text-muted line-clamp-1">{material.description}</p>
-      )}
-
-      {material.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {material.tags.slice(0, 4).map(tag => (
-            <span
-              key={tag}
-              className="text-xs px-2 py-0.5 rounded-lg font-medium"
-              style={{ fontFamily: 'var(--font-mono)', background: accentColor + '18', color: accentColor }}
-            >
-              #{tag}
-            </span>
-          ))}
-          {material.tags.length > 4 && (
-            <span className="text-xs text-muted self-center">+{material.tags.length - 4}</span>
-          )}
-        </div>
-      )}
-
-      {(material.supplier || material.typical_cost_usd != null) && (
-        <div className="pt-1 border-t border-surface flex items-center justify-between gap-2">
-          {material.supplier && <span className="text-xs text-muted truncate">{material.supplier}</span>}
-          {material.typical_cost_usd != null && (
-            <span
-              className="text-xs font-semibold shrink-0"
-              style={{ fontFamily: 'var(--font-mono)', color: accentColor }}
-            >
-              ${material.typical_cost_usd.toFixed(2)}
-            </span>
-          )}
-        </div>
-      )}
-    </Link>
   )
 }
 
