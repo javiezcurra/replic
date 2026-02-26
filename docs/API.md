@@ -25,6 +25,7 @@ Authorization: Bearer <firebase-id-token>
 - [Health](#health)
 - [Users](#users)
 - [Designs](#designs)
+- [Materials](#materials)
 
 ---
 
@@ -417,3 +418,108 @@ Permanently delete a draft design. Caller must be an author. Published and locke
 ---
 
 _This document is a living reference and will be populated as endpoints are built._
+
+---
+
+## Materials
+
+Materials are the physical items (consumables and equipment) that experiment designs reference via `material_id`. They are shared across designs and never deleted.
+
+### Shared types
+
+<details>
+<summary><strong>Material object</strong></summary>
+
+```json
+{
+  "id": "firestore-doc-id",
+  "name": "Erlenmeyer Flask (250 mL)",
+  "type": "Equipment",
+  "description": "Borosilicate glass flask for mixing solutions.",
+  "category": "glassware",
+  "link": "https://example.com/product",
+  "supplier": "Fisher Scientific",
+  "unit": "unit",
+  "typical_cost_usd": 8.50,
+  "safety_notes": null,
+  "tags": ["chemistry", "lab"],
+  "is_verified": false,
+  "created_by": "firebase-uid",
+  "created_at": "2024-02-25T00:00:00.000Z",
+  "updated_at": "2024-02-25T00:00:00.000Z"
+}
+```
+
+</details>
+
+**Enum values**
+
+| Field | Values |
+|---|---|
+| `type` | `Consumable` `Equipment` |
+| `category` | `glassware` `reagent` `equipment` `biological` `other` |
+
+---
+
+### `GET /api/materials`
+
+List all materials, ordered by `created_at` descending.
+
+Supports filtering by **one** dimension at a time (each maps to a dedicated Firestore composite index).
+
+**Query parameters**
+
+| Param | Type | Description |
+|---|---|---|
+| `tags` | `string` | Filter materials whose `tags` array contains this value |
+| `category` | `string` | Filter by `category` (ignored if `tags` is also provided) |
+| `type` | `string` | Filter by `type` (ignored if `tags` or `category` is provided) |
+| `limit` | `number` | Results per page (default `20`, max `100`) |
+| `after` | `string` | Material ID to start after (cursor-based pagination) |
+
+**Response `200`**
+
+```json
+{ "status": "ok", "data": [ ...Material ], "count": 20 }
+```
+
+---
+
+### `POST /api/materials` 🔒
+
+Create a new material entry. The `is_verified` field is always `false` for user-created materials.
+
+**Request body**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | `string` | Yes | Trimmed before storage |
+| `type` | `MaterialType` | Yes | `Consumable` or `Equipment` |
+| `category` | `MaterialCategory` | Yes | See enum table |
+| `unit` | `string` | No | Defaults to `"unit"` |
+| `description` | `string` | No | — |
+| `link` | `string` | No | Product or supplier URL |
+| `supplier` | `string` | No | — |
+| `typical_cost_usd` | `number` | No | — |
+| `safety_notes` | `string` | No | — |
+| `tags` | `string[]` | No | Max 10 |
+
+**Response `201`**
+
+```json
+{ "status": "ok", "data": { ...Material } }
+```
+
+---
+
+### `GET /api/materials/:id`
+
+Get a single material by ID.
+
+**Response `200`**
+
+```json
+{ "status": "ok", "data": { ...Material } }
+```
+
+**Response `404`** — material not found.
