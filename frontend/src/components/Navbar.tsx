@@ -13,13 +13,14 @@ const adminNavLinks = [
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [adminOpen, setAdminOpen] = useState(false)
+  const [adminOpen, setAdminOpen]   = useState(false)
+  const [userOpen,  setUserOpen]    = useState(false)
   const { user, isAdmin, loading, signIn, signOut } = useAuth()
 
   const userNavLinks = user
     ? [
-        { to: '/my-lab', label: 'My Lab', end: false },
-        { to: '/designs/mine', label: 'My Designs', end: false },
+        { to: '/my-lab',       label: 'My Lab',      end: false },
+        { to: '/designs/mine', label: 'My Designs',  end: false },
       ]
     : []
 
@@ -35,44 +36,15 @@ export default function Navbar() {
       isActive ? 'bg-surface text-primary' : 'text-gray-600 hover:bg-gray-100'
     }`
 
-  const authButtons = loading ? null : user ? (
-    <>
-      <Link to="/profile" className="text-sm font-medium text-gray-700 hover:text-gray-900 px-3 py-2">
-        {user.displayName ?? user.email}
-      </Link>
-      <button onClick={signOut} className="btn-secondary text-sm">Sign out</button>
-    </>
-  ) : (
-    <>
-      <button onClick={signIn} className="btn-secondary text-sm">Sign in</button>
-      <button onClick={signIn} className="btn-primary text-sm">Get started</button>
-    </>
-  )
-
-  const mobileAuthButtons = loading ? null : user ? (
-    <>
-      <Link
-        to="/profile"
-        onClick={() => setMobileOpen(false)}
-        className="block px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100"
-      >
-        {user.displayName ?? user.email}
-      </Link>
-      <button onClick={signOut} className="btn-secondary w-full justify-center">Sign out</button>
-    </>
-  ) : (
-    <>
-      <button onClick={signIn} className="btn-secondary w-full justify-center">Sign in</button>
-      <button onClick={signIn} className="btn-primary w-full justify-center">Get started</button>
-    </>
-  )
+  const dropdownItem = 'block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors'
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
+
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2 shrink-0">
             <span
               className="text-xl font-bold tracking-tight"
               style={{ color: 'var(--color-primary)', fontFamily: 'var(--font-display)' }}
@@ -84,65 +56,108 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Desktop nav */}
+          {/* Desktop — core platform links */}
           <nav className="hidden md:flex items-center gap-1">
             {publicNavLinks.map(({ to, label, end }) => (
               <NavLink key={to} to={to} end={end} className={navLinkClass}>
                 {label}
               </NavLink>
             ))}
-
             {userNavLinks.map(({ to, label, end }) => (
               <NavLink key={to} to={to} end={end} className={navLinkClass}>
                 {label}
               </NavLink>
             ))}
-
-            {/* Admin Panel dropdown — admin-only */}
-            {isAdmin && (
-              <div className="relative">
-                <button
-                  onClick={() => setAdminOpen((v) => !v)}
-                  onBlur={() => setTimeout(() => setAdminOpen(false), 150)}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium
-                             text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-                >
-                  Admin Panel
-                  <svg
-                    className={`w-3.5 h-3.5 transition-transform ${adminOpen ? 'rotate-180' : ''}`}
-                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {adminOpen && (
-                  <div className="absolute left-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg
-                                  border border-gray-200 py-1 z-50">
-                    {adminNavLinks.map(({ to, label }) => (
-                      <NavLink
-                        key={to}
-                        to={to}
-                        onClick={() => setAdminOpen(false)}
-                        className={({ isActive }) =>
-                          `block px-4 py-2 text-sm transition-colors ${
-                            isActive
-                              ? 'bg-surface text-primary font-medium'
-                              : 'text-gray-700 hover:bg-gray-50'
-                          }`
-                        }
-                      >
-                        {label}
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </nav>
 
-          {/* Desktop CTA */}
-          <div className="hidden md:flex items-center gap-3">
-            {authButtons}
+          {/* Desktop — right side: Admin Panel + user menu */}
+          <div className="hidden md:flex items-center gap-1">
+            {loading ? null : user ? (
+              <>
+                {/* Admin Panel dropdown */}
+                {isAdmin && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setAdminOpen((v) => !v)}
+                      onBlur={() => setTimeout(() => setAdminOpen(false), 150)}
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium
+                                 text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                    >
+                      Admin Panel
+                      <svg
+                        className={`w-3.5 h-3.5 transition-transform ${adminOpen ? 'rotate-180' : ''}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {adminOpen && (
+                      <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg
+                                      border border-gray-200 py-1 z-50">
+                        {adminNavLinks.map(({ to, label }) => (
+                          <NavLink
+                            key={to}
+                            to={to}
+                            onClick={() => setAdminOpen(false)}
+                            className={({ isActive }) =>
+                              `block px-4 py-2 text-sm transition-colors ${
+                                isActive
+                                  ? 'bg-surface text-primary font-medium'
+                                  : 'text-gray-700 hover:bg-gray-50'
+                              }`
+                            }
+                          >
+                            {label}
+                          </NavLink>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* User dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setUserOpen((v) => !v)}
+                    onBlur={() => setTimeout(() => setUserOpen(false), 150)}
+                    className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium
+                               text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                  >
+                    {user.displayName ?? user.email}
+                    <svg
+                      className={`w-3.5 h-3.5 transition-transform ${userOpen ? 'rotate-180' : ''}`}
+                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {userOpen && (
+                    <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg
+                                    border border-gray-200 py-1 z-50">
+                      <Link
+                        to="/profile"
+                        onClick={() => setUserOpen(false)}
+                        className={dropdownItem}
+                      >
+                        My Profile
+                      </Link>
+                      <hr className="my-1 border-gray-100" />
+                      <button
+                        onClick={() => { setUserOpen(false); signOut() }}
+                        className={dropdownItem}
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <button onClick={signIn} className="btn-secondary text-sm">Sign in</button>
+                <button onClick={signIn} className="btn-primary text-sm">Get started</button>
+              </>
+            )}
           </div>
 
           {/* Mobile hamburger */}
@@ -189,7 +204,28 @@ export default function Navbar() {
               </>
             )}
             <div className="pt-2 flex flex-col gap-2">
-              {mobileAuthButtons}
+              {!loading && user ? (
+                <>
+                  <Link
+                    to="/profile"
+                    onClick={() => setMobileOpen(false)}
+                    className="block px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100"
+                  >
+                    My Profile
+                  </Link>
+                  <button
+                    onClick={() => { setMobileOpen(false); signOut() }}
+                    className="btn-secondary w-full justify-center"
+                  >
+                    Sign out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={signIn} className="btn-secondary w-full justify-center">Sign in</button>
+                  <button onClick={signIn} className="btn-primary w-full justify-center">Get started</button>
+                </>
+              )}
             </div>
           </div>
         )}
