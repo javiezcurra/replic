@@ -11,6 +11,7 @@ import EditDesign from './pages/EditDesign'
 import DesignDetail from './pages/DesignDetail'
 import Materials from './pages/Materials'
 import MaterialDetail from './pages/MaterialDetail'
+import CreateMaterial from './pages/CreateMaterial'
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="designs/mine" element={<MyDesigns />} />
           <Route path="designs/new" element={<CreateDesign />} />
           <Route path="designs/:id/edit" element={<EditDesign />} />
+          <Route path="materials/new" element={<CreateMaterial />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />
