@@ -65,6 +65,17 @@ export default function MaterialDetail() {
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
+      {/* Image */}
+      {material.image_url && (
+        <div className="mb-4">
+          <img
+            src={material.image_url}
+            alt={material.name}
+            className="w-full max-h-64 object-contain rounded-xl border border-gray-200 bg-gray-50"
+          />
+        </div>
+      )}
+
       {/* Description */}
       {material.description && (
         <section className="card p-5 mb-4">

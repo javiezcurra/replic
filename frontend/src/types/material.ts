@@ -9,6 +9,7 @@ export interface Material {
   description?: string
   category: MaterialCategory
   link?: string
+  image_url?: string
   supplier?: string
   unit: string
   typical_cost_usd?: number

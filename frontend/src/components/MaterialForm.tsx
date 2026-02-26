@@ -1,4 +1,5 @@
 import type { MaterialCategory, MaterialType } from '../types/material'
+import ImageUpload from './ImageUpload'
 
 const CATEGORY_OPTIONS: { value: MaterialCategory; label: string }[] = [
   { value: 'glassware', label: 'Glassware' },
@@ -14,10 +15,12 @@ export interface MaterialFormValues {
   category: MaterialCategory | ''
   unit: string
   description: string
+  link: string
   supplier: string
   typical_cost_usd: string  // string for controlled input
   safety_notes: string
   tags: string              // comma-separated
+  image_url: string
 }
 
 export function defaultMaterialFormValues(): MaterialFormValues {
@@ -27,10 +30,12 @@ export function defaultMaterialFormValues(): MaterialFormValues {
     category: '',
     unit: '',
     description: '',
+    link: '',
     supplier: '',
     typical_cost_usd: '',
     safety_notes: '',
     tags: '',
+    image_url: '',
   }
 }
 
@@ -41,10 +46,12 @@ export function formValuesToBody(v: MaterialFormValues) {
     category: v.category as MaterialCategory,
     ...(v.unit ? { unit: v.unit } : {}),
     ...(v.description ? { description: v.description } : {}),
+    ...(v.link ? { link: v.link } : {}),
     ...(v.supplier ? { supplier: v.supplier } : {}),
     ...(v.typical_cost_usd ? { typical_cost_usd: parseFloat(v.typical_cost_usd) } : {}),
     ...(v.safety_notes ? { safety_notes: v.safety_notes } : {}),
     tags: v.tags.split(',').map((t) => t.trim()).filter(Boolean),
+    ...(v.image_url ? { image_url: v.image_url } : {}),
   }
 }
 
@@ -142,6 +149,18 @@ export default function MaterialForm({ values, onChange }: Props) {
         />
       </div>
 
+      {/* Link */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Product / supplier link</label>
+        <input
+          type="url"
+          value={values.link}
+          onChange={(e) => set('link', e.target.value)}
+          placeholder="https://"
+          className="w-full input-sm"
+        />
+      </div>
+
       {/* Typical cost */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Typical cost (USD)</label>
@@ -179,6 +198,12 @@ export default function MaterialForm({ values, onChange }: Props) {
           placeholder="chemistry, lab, glassware"
           className="w-full input-sm"
         />
+      </div>
+
+      {/* Image */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Image</label>
+        <ImageUpload value={values.image_url} onChange={(url) => set('image_url', url)} />
       </div>
     </div>
   )

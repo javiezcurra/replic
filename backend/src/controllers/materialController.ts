@@ -112,6 +112,7 @@ export async function createMaterial(
       description: body.description,
       category: body.category,
       link: body.link,
+      image_url: body.image_url,
       supplier: body.supplier,
       unit: body.unit ?? 'unit',
       typical_cost_usd: body.typical_cost_usd,
