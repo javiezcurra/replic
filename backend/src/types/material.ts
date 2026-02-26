@@ -17,7 +17,6 @@ export interface Material {
   link?: string
   image_url?: string
   supplier?: string
-  unit: string             // default "unit"; e.g. mL, g, unit
   typical_cost_usd?: number
   safety_notes?: string
   tags: string[]           // searchable tags, max 10
@@ -33,7 +32,6 @@ export interface CreateMaterialBody {
   name: string
   type: MaterialType
   category: MaterialCategory
-  unit?: string
   description?: string
   link?: string
   image_url?: string

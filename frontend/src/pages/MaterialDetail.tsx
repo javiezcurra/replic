@@ -85,13 +85,10 @@ export default function MaterialDetail() {
       )}
 
       {/* Details */}
+      {(material.supplier || material.typical_cost_usd != null || material.link) && (
       <section className="card p-5 mb-4">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Details</h2>
         <dl className="space-y-2 text-sm">
-          <div className="flex gap-2">
-            <dt className="w-32 shrink-0 text-gray-500">Unit</dt>
-            <dd className="text-gray-800">{material.unit}</dd>
-          </div>
           {material.supplier && (
             <div className="flex gap-2">
               <dt className="w-32 shrink-0 text-gray-500">Supplier</dt>
@@ -121,6 +118,7 @@ export default function MaterialDetail() {
           )}
         </dl>
       </section>
+      )}
 
       {/* Safety notes */}
       {material.safety_notes && (

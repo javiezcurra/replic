@@ -11,7 +11,6 @@ export interface Material {
   link?: string
   image_url?: string
   supplier?: string
-  unit: string
   typical_cost_usd?: number
   safety_notes?: string
   tags: string[]

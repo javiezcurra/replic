@@ -13,7 +13,6 @@ export interface MaterialFormValues {
   name: string
   type: MaterialType | ''
   category: MaterialCategory | ''
-  unit: string
   description: string
   link: string
   supplier: string
@@ -28,7 +27,6 @@ export function defaultMaterialFormValues(): MaterialFormValues {
     name: '',
     type: '',
     category: '',
-    unit: '',
     description: '',
     link: '',
     supplier: '',
@@ -44,7 +42,6 @@ export function formValuesToBody(v: MaterialFormValues) {
     name: v.name,
     type: v.type as MaterialType,
     category: v.category as MaterialCategory,
-    ...(v.unit ? { unit: v.unit } : {}),
     ...(v.description ? { description: v.description } : {}),
     ...(v.link ? { link: v.link } : {}),
     ...(v.supplier ? { supplier: v.supplier } : {}),
@@ -112,30 +109,16 @@ export default function MaterialForm({ values, onChange }: Props) {
         </div>
       </div>
 
-      {/* Unit + Supplier */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Unit <span className="text-gray-400 font-normal">(default: unit)</span>
-          </label>
-          <input
-            type="text"
-            value={values.unit}
-            onChange={(e) => set('unit', e.target.value)}
-            placeholder="unit, mL, g, …"
-            className="w-full input-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
-          <input
-            type="text"
-            value={values.supplier}
-            onChange={(e) => set('supplier', e.target.value)}
-            placeholder="e.g. Fisher Scientific"
-            className="w-full input-sm"
-          />
-        </div>
+      {/* Supplier */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+        <input
+          type="text"
+          value={values.supplier}
+          onChange={(e) => set('supplier', e.target.value)}
+          placeholder="e.g. Fisher Scientific"
+          className="w-full input-sm"
+        />
       </div>
 
       {/* Description */}

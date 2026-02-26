@@ -156,8 +156,6 @@ function MaterialCard({ material }: { material: Material }) {
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
         <span className="capitalize">{material.category}</span>
-        <span>·</span>
-        <span>{material.unit}</span>
         {material.typical_cost_usd != null && (
           <>
             <span>·</span>
