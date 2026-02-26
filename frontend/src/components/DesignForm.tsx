@@ -642,7 +642,7 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
             <div>
               <FieldLabel
                 label="Reference Experiments"
-                tooltip="Link other Replic designs that directly inspired or informed this one. Example: if you're adapting the "Yeast Fermentation Rate" design, find and add it here."
+                tooltip={'Link other Replic designs that directly inspired or informed this one. Example: if you\'re adapting the "Yeast Fermentation Rate" design, find and add it here.'}
               />
               <DesignReferencePicker
                 selectedIds={values.reference_experiment_ids}
