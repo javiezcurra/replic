@@ -8,15 +8,8 @@ const publicNavLinks = [
   { to: '/materials', label: 'Materials', end: true },
 ]
 
-const previewNavLinks = [
-  { to: '/materials-1', label: 'Materials 1', end: false },
-  { to: '/materials-2', label: 'Materials 2', end: false },
-  { to: '/materials-3', label: 'Materials 3', end: false },
-]
-
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [previewOpen, setPreviewOpen] = useState(false)
   const { user, loading, signIn, signOut } = useAuth()
 
   const navLinks = [
@@ -92,44 +85,6 @@ export default function Navbar() {
               </NavLink>
             ))}
 
-            {/* Preview dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setPreviewOpen(v => !v)}
-                onBlur={() => setTimeout(() => setPreviewOpen(false), 150)}
-                className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium
-                           text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-              >
-                Preview
-                <svg
-                  className={`w-3.5 h-3.5 transition-transform ${previewOpen ? 'rotate-180' : ''}`}
-                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {previewOpen && (
-                <div className="absolute left-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg
-                                border border-gray-200 py-1 z-50">
-                  {previewNavLinks.map(({ to, label }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      onClick={() => setPreviewOpen(false)}
-                      className={({ isActive }) =>
-                        `block px-4 py-2 text-sm transition-colors ${
-                          isActive
-                            ? 'bg-surface text-primary font-medium'
-                            : 'text-gray-700 hover:bg-gray-50'
-                        }`
-                      }
-                    >
-                      {label}
-                    </NavLink>
-                  ))}
-                </div>
-              )}
-            </div>
           </nav>
 
           {/* Desktop CTA */}
@@ -175,27 +130,6 @@ export default function Navbar() {
                 {label}
               </NavLink>
             ))}
-            <div className="pt-1 border-t border-gray-100">
-              <p className="px-3 py-1 text-xs font-medium text-gray-400 uppercase tracking-wide">
-                Preview
-              </p>
-              {previewNavLinks.map(({ to, label }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  onClick={() => setMobileOpen(false)}
-                  className={({ isActive }) =>
-                    `block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-surface text-primary'
-                        : 'text-gray-500 hover:bg-gray-100'
-                    }`
-                  }
-                >
-                  {label}
-                </NavLink>
-              ))}
-            </div>
             <div className="pt-2 flex flex-col gap-2">
               {mobileAuthButtons}
             </div>

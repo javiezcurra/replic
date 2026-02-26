@@ -63,20 +63,25 @@ export async function listMaterials(
     const { category, type, tags, limit: limitParam, after } = req.query
     const limit = Math.min(parseInt(limitParam as string) || 20, 100)
 
-    let query = adminDb
-      .collection(MATERIALS)
-      .orderBy('created_at', 'desc')
-      .limit(limit)
+    // Build the base query. When a filter is applied we intentionally omit
+    // orderBy('created_at') so that the query only needs Firestore's auto-created
+    // single-field indexes rather than a composite index. Without orderBy the
+    // results come back in document-ID order, which is approximately chronological
+    // for Firebase auto-IDs and is perfectly consistent for cursor pagination.
+    let query: FirebaseFirestore.Query = adminDb.collection(MATERIALS)
 
-    // Apply at most one filter to match the available composite indexes.
-    // Priority: tags > category > type
     if (tags) {
       query = query.where('tags', 'array-contains', tags as string)
     } else if (category && MATERIAL_CATEGORIES.includes(category as MaterialCategory)) {
       query = query.where('category', '==', category as string)
     } else if (type && MATERIAL_TYPES.includes(type as MaterialType)) {
       query = query.where('type', '==', type as string)
+    } else {
+      // Unfiltered — safe to order by created_at (only needs the auto-index)
+      query = query.orderBy('created_at', 'desc')
     }
+
+    query = query.limit(limit)
 
     if (after) {
       const cursorSnap = await adminDb.collection(MATERIALS).doc(after as string).get()
