@@ -52,6 +52,98 @@ function validateCreate(body: CreateMaterialBody): string | null {
   return null
 }
 
+// ─── POST /api/materials/bulk-upsert ─────────────────────────────────────────
+// Admin-only. Creates or updates materials by exact name match.
+// Returns per-item results so the client can show a detailed summary.
+export async function bulkUpsertMaterials(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { materials } = req.body as { materials: CreateMaterialBody[] }
+
+    if (!Array.isArray(materials) || materials.length === 0) {
+      return next(badRequest('materials array is required and must be non-empty'))
+    }
+    if (materials.length > 500) {
+      return next(badRequest('cannot upsert more than 500 materials at once'))
+    }
+
+    type UpsertResult =
+      | { name: string; action: 'created' | 'updated'; id: string }
+      | { name: string; error: string }
+
+    const results: UpsertResult[] = []
+
+    for (const item of materials) {
+      const validationError = validateCreate(item)
+      if (validationError) {
+        results.push({ name: item.name ?? '', error: validationError })
+        continue
+      }
+
+      const trimmedName = item.name.trim()
+
+      try {
+        // Exact-match name lookup
+        const existing = await adminDb
+          .collection(MATERIALS)
+          .where('name', '==', trimmedName)
+          .limit(1)
+          .get()
+
+        if (!existing.empty) {
+          // Update all fields on the existing document
+          const ref = existing.docs[0].ref
+          await ref.update({
+            name:             trimmedName,
+            type:             item.type,
+            category:         item.category,
+            description:      item.description ?? null,
+            link:             item.link ?? null,
+            image_url:        item.image_url ?? null,
+            supplier:         item.supplier ?? null,
+            typical_cost_usd: item.typical_cost_usd ?? null,
+            safety_notes:     item.safety_notes ?? null,
+            tags:             item.tags ?? [],
+            updated_at:       FieldValue.serverTimestamp(),
+          })
+          results.push({ name: trimmedName, action: 'updated', id: ref.id })
+        } else {
+          // Create new document
+          const docRef = adminDb.collection(MATERIALS).doc()
+          const now = FieldValue.serverTimestamp()
+          await docRef.set({
+            id:               docRef.id,
+            name:             trimmedName,
+            type:             item.type,
+            category:         item.category,
+            description:      item.description,
+            link:             item.link,
+            image_url:        item.image_url,
+            supplier:         item.supplier,
+            typical_cost_usd: item.typical_cost_usd,
+            safety_notes:     item.safety_notes,
+            tags:             item.tags ?? [],
+            is_verified:      false,
+            created_by:       req.user!.uid,
+            created_at:       now,
+            updated_at:       now,
+          })
+          results.push({ name: trimmedName, action: 'created', id: docRef.id })
+        }
+      } catch (itemErr) {
+        results.push({ name: trimmedName, error: 'Unexpected error — item skipped' })
+      }
+    }
+
+    res.status(200).json({ status: 'ok', results })
+  } catch (err) {
+    next(err)
+  }
+}
+
 // ─── GET /api/materials ───────────────────────────────────────────────────────
 // Public list. Filtered by one of: ?tags= | ?category= | ?type=
 // (Each filter corresponds to a dedicated Firestore composite index.)

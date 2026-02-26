@@ -13,7 +13,6 @@ function parseCSV(text: string): { headers: string[]; rows: Record<string, strin
     let i = 0
     while (i <= line.length) {
       if (i === line.length) {
-        // trailing comma produces an empty field
         break
       }
       if (line[i] === '"') {
@@ -60,15 +59,16 @@ function parseCSV(text: string): { headers: string[]; rows: Record<string, strin
   return { headers, rows }
 }
 
-// Known optional string fields — forward-compatible: add new ones here as the schema grows
+// Known optional string fields
 const OPTIONAL_STRING_FIELDS = ['description', 'safety_notes', 'link', 'supplier', 'image_url'] as const
 
-function rowToBody(row: Record<string, string>) {
+function rowToMaterial(row: Record<string, string>) {
   const body: Record<string, unknown> = {
     name: row.name?.trim() ?? '',
     type: row.type?.trim() as MaterialType,
     category: row.category?.trim() as MaterialCategory,
-    tags: row.tags ? row.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
+    // Support both | and , as tag delimiters
+    tags: row.tags ? row.tags.split(/[|,]/).map((t) => t.trim()).filter(Boolean) : [],
   }
 
   for (const field of OPTIONAL_STRING_FIELDS) {
@@ -83,11 +83,9 @@ function rowToBody(row: Record<string, string>) {
   return body
 }
 
-interface RowResult {
-  rowIndex: number
-  success: boolean
-  error?: string
-}
+type UpsertResult =
+  | { name: string; action: 'created' | 'updated'; id: string }
+  | { name: string; error: string }
 
 interface Props {
   onClose: () => void
@@ -100,8 +98,7 @@ export default function BulkUploadMaterialsModal({ onClose, onComplete }: Props)
   const [fileName, setFileName] = useState('')
   const [parseError, setParseError] = useState('')
   const [uploading, setUploading] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [results, setResults] = useState<RowResult[] | null>(null)
+  const [results, setResults] = useState<UpsertResult[] | null>(null)
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -132,33 +129,28 @@ export default function BulkUploadMaterialsModal({ onClose, onComplete }: Props)
   async function handleUpload() {
     if (rows.length === 0 || uploading) return
     setUploading(true)
-    setProgress(0)
 
-    const uploadResults: RowResult[] = []
-
-    for (let i = 0; i < rows.length; i++) {
-      const body = rowToBody(rows[i])
-      try {
-        await api.post('/api/materials', body)
-        uploadResults.push({ rowIndex: i + 2, success: true }) // +2: 1-based index + header row
-      } catch (err: any) {
-        const message =
-          (err?.body as any)?.message ?? err?.message ?? 'Unknown error'
-        uploadResults.push({ rowIndex: i + 2, success: false, error: message })
+    try {
+      const materials = rows.map(rowToMaterial)
+      const res = await api.post<{ status: string; results: UpsertResult[] }>(
+        '/api/materials/bulk-upsert',
+        { materials },
+      )
+      setResults(res.results)
+      if (res.results.some((r) => !('error' in r))) {
+        onComplete()
       }
-      setProgress(i + 1)
-    }
-
-    setResults(uploadResults)
-    setUploading(false)
-
-    if (uploadResults.some((r) => r.success)) {
-      onComplete()
+    } catch (err: any) {
+      const message = err?.body?.message ?? err?.message ?? 'Upload failed'
+      setParseError(message)
+    } finally {
+      setUploading(false)
     }
   }
 
-  const succeeded = results?.filter((r) => r.success).length ?? 0
-  const failed = results?.filter((r) => !r.success).length ?? 0
+  const created  = results?.filter((r) => 'action' in r && r.action === 'created').length ?? 0
+  const updated  = results?.filter((r) => 'action' in r && r.action === 'updated').length ?? 0
+  const failed   = results?.filter((r) => 'error'  in r).length ?? 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -191,6 +183,13 @@ export default function BulkUploadMaterialsModal({ onClose, onComplete }: Props)
                 <code className="text-xs bg-gray-100 px-1 rounded">link</code>,{' '}
                 <code className="text-xs bg-gray-100 px-1 rounded">typical_cost_usd</code>.
               </p>
+              <p className="text-xs text-gray-500">
+                Tags can be separated by <code className="bg-gray-100 px-1 rounded">|</code> or{' '}
+                <code className="bg-gray-100 px-1 rounded">,</code> — e.g.{' '}
+                <code className="bg-gray-100 px-1 rounded">chemistry|biology|measurement</code>.
+                If a row's name matches an existing material it will be updated; otherwise a new
+                one is created.
+              </p>
 
               <div>
                 <input
@@ -222,29 +221,20 @@ export default function BulkUploadMaterialsModal({ onClose, onComplete }: Props)
               )}
 
               {uploading && (
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>Uploading…</span>
-                    <span>
-                      {progress} / {rows.length}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div
-                      className="bg-brand-600 h-2 rounded-full transition-all"
-                      style={{ width: `${(progress / rows.length) * 100}%` }}
-                    />
-                  </div>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                  Uploading {rows.length} row{rows.length !== 1 ? 's' : ''}…
                 </div>
               )}
             </>
           ) : (
             <div className="space-y-3">
               <div className="flex gap-4 text-sm">
-                {succeeded > 0 && (
-                  <span className="text-green-700 font-medium">
-                    {succeeded} succeeded
-                  </span>
+                {created > 0 && (
+                  <span className="text-green-700 font-medium">{created} created</span>
+                )}
+                {updated > 0 && (
+                  <span className="text-blue-700 font-medium">{updated} updated</span>
                 )}
                 {failed > 0 && (
                   <span className="text-red-600 font-medium">{failed} failed</span>
@@ -254,13 +244,13 @@ export default function BulkUploadMaterialsModal({ onClose, onComplete }: Props)
               {failed > 0 && (
                 <div className="max-h-48 overflow-y-auto space-y-1">
                   {results
-                    .filter((r) => !r.success)
-                    .map((r) => (
+                    .filter((r): r is { name: string; error: string } => 'error' in r)
+                    .map((r, i) => (
                       <div
-                        key={r.rowIndex}
+                        key={i}
                         className="text-xs text-red-600 bg-red-50 px-3 py-1.5 rounded"
                       >
-                        <span className="font-medium">Row {r.rowIndex}:</span> {r.error}
+                        <span className="font-medium">{r.name || '(unnamed)'}:</span> {r.error}
                       </div>
                     ))}
                 </div>
@@ -280,7 +270,7 @@ export default function BulkUploadMaterialsModal({ onClose, onComplete }: Props)
               disabled={rows.length === 0 || uploading}
               className="btn-primary text-sm disabled:opacity-50"
             >
-              {uploading ? `Uploading ${progress}/${rows.length}…` : 'Upload'}
+              {uploading ? 'Uploading…' : 'Upload'}
             </button>
           )}
         </div>
