@@ -2,28 +2,23 @@
  * Materials — Admin Panel page for browsing and managing the full materials catalog.
  * Only accessible to users with is_admin === true.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import type { Material, MaterialCategory, MaterialListResponse } from '../types/material'
 import { api } from '../lib/api'
+import { useCategories } from '../hooks/useCategories'
 import BulkUploadMaterialsModal from '../components/BulkUploadMaterialsModal'
 import CreateMaterialModal from '../components/CreateMaterialModal'
+import ManageCategoriesModal from '../components/ManageCategoriesModal'
 import MaterialCard from '../components/MaterialCard'
 import MaterialDetailModal from '../components/MaterialDetailModal'
 
 const PAGE_SIZE = 50
 
-const CATEGORIES: { value: MaterialCategory; label: string; emoji: string }[] = [
-  { value: 'glassware',  label: 'Glassware',   emoji: '🫙' },
-  { value: 'reagent',    label: 'Reagent',     emoji: '⚗️' },
-  { value: 'equipment',  label: 'Instruments', emoji: '🔬' },
-  { value: 'biological', label: 'Biological',  emoji: '🧬' },
-  { value: 'other',      label: 'Other',       emoji: '📦' },
-]
-
 export default function Materials() {
   const { user, isAdmin, loading: authLoading } = useAuth()
+  const { categories, setCategories } = useCategories()
 
   const [equipmentAll, setEquipmentAll] = useState<Material[]>([])
   const [consumablesAll, setConsumablesAll] = useState<Material[]>([])
@@ -35,6 +30,7 @@ export default function Materials() {
   const [category, setCategory] = useState<MaterialCategory | ''>('')
   const [showBulkUpload, setShowBulkUpload] = useState(false)
   const [showCreateMaterial, setShowCreateMaterial] = useState(false)
+  const [showManageCategories, setShowManageCategories] = useState(false)
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
 
   async function fetchAll() {
@@ -105,6 +101,21 @@ export default function Materials() {
     return <Navigate to="/" replace />
   }
 
+  // Only show pills for categories that appear in the loaded materials
+  const usedSlugs = useMemo(
+    () => new Set([...equipmentAll, ...consumablesAll].map((m) => m.category)),
+    [equipmentAll, consumablesAll],
+  )
+  const activeCategories = useMemo(
+    () => categories.filter((c) => usedSlugs.has(c.id)),
+    [categories, usedSlugs],
+  )
+
+  // Label lookup for empty-state messages
+  const categoryLabel = category
+    ? (categories.find((c) => c.id === category)?.name ?? category)
+    : ''
+
   const equipment   = category ? equipmentAll.filter((m) => m.category === category) : equipmentAll
   const consumables = category ? consumablesAll.filter((m) => m.category === category) : consumablesAll
 
@@ -130,7 +141,20 @@ export default function Materials() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <button
+              onClick={() => setShowManageCategories(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl
+                         border-2 border-surface-2 text-ink text-sm font-semibold
+                         hover:border-ink transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994
+                     1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+              Edit categories
+            </button>
             <button
               onClick={() => setShowBulkUpload(true)}
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl
@@ -157,15 +181,15 @@ export default function Materials() {
           </div>
         </div>
 
-        {/* Category pills */}
+        {/* Category pills — only categories with at least one material */}
         <div className="mt-6 flex flex-wrap gap-2">
           <CategoryPill label="All" active={category === ''} onClick={() => setCategory('')} />
-          {CATEGORIES.map((c) => (
+          {activeCategories.map((c) => (
             <CategoryPill
-              key={c.value}
-              label={`${c.emoji} ${c.label}`}
-              active={category === c.value}
-              onClick={() => setCategory(category === c.value ? '' : c.value)}
+              key={c.id}
+              label={c.emoji ? `${c.emoji} ${c.name}` : c.name}
+              active={category === c.id}
+              onClick={() => setCategory(category === c.id ? '' : c.id)}
             />
           ))}
         </div>
@@ -211,11 +235,7 @@ export default function Materials() {
               loadingMore={loadingMoreEq}
               onLoadMore={loadMoreEquipment}
               onDetails={setSelectedMaterial}
-              emptyMsg={
-                category
-                  ? `No equipment in the ${CATEGORIES.find((c) => c.value === category)?.label ?? category} category.`
-                  : 'No equipment yet.'
-              }
+              emptyMsg={category ? `No equipment in the ${categoryLabel} category.` : 'No equipment yet.'}
               emptyEmoji="🔬"
             />
             <MaterialsSection
@@ -229,11 +249,7 @@ export default function Materials() {
               loadingMore={loadingMoreCon}
               onLoadMore={loadMoreConsumables}
               onDetails={setSelectedMaterial}
-              emptyMsg={
-                category
-                  ? `No consumables in the ${CATEGORIES.find((c) => c.value === category)?.label ?? category} category.`
-                  : 'No consumables yet.'
-              }
+              emptyMsg={category ? `No consumables in the ${categoryLabel} category.` : 'No consumables yet.'}
               emptyEmoji="🧪"
             />
           </div>
@@ -251,6 +267,14 @@ export default function Materials() {
         <CreateMaterialModal
           onClose={() => setShowCreateMaterial(false)}
           onCreated={handleMaterialCreated}
+        />
+      )}
+
+      {showManageCategories && (
+        <ManageCategoriesModal
+          categories={categories}
+          onClose={() => setShowManageCategories(false)}
+          onChange={setCategories}
         />
       )}
 

@@ -8,19 +8,11 @@ import {
   CreateMaterialBody,
   UpdateMaterialBody,
   MaterialType,
-  MaterialCategory,
 } from '../types/material'
 
 const MATERIALS = 'materials'
 
 const MATERIAL_TYPES: MaterialType[] = ['Consumable', 'Equipment']
-const MATERIAL_CATEGORIES: MaterialCategory[] = [
-  'glassware',
-  'reagent',
-  'equipment',
-  'biological',
-  'other',
-]
 
 function toResponse(m: Material): MaterialResponse {
   return {
@@ -46,8 +38,7 @@ function validateCreate(body: CreateMaterialBody): string | null {
   if (!body.name?.trim()) return 'name is required'
   if (!body.type || !MATERIAL_TYPES.includes(body.type))
     return `type must be one of: ${MATERIAL_TYPES.join(', ')}`
-  if (!body.category || !MATERIAL_CATEGORIES.includes(body.category))
-    return `category must be one of: ${MATERIAL_CATEGORIES.join(', ')}`
+  if (!body.category?.trim()) return 'category is required'
   if (body.tags !== undefined && body.tags.length > 10) return 'tags cannot exceed 10'
   return null
 }
@@ -165,7 +156,7 @@ export async function listMaterials(
 
     if (tags) {
       query = query.where('tags', 'array-contains', tags as string)
-    } else if (category && MATERIAL_CATEGORIES.includes(category as MaterialCategory)) {
+    } else if (category) {
       query = query.where('category', '==', category as string)
     } else if (type && MATERIAL_TYPES.includes(type as MaterialType)) {
       query = query.where('type', '==', type as string)
@@ -249,8 +240,8 @@ export async function updateMaterial(
     if (body.type !== undefined && !MATERIAL_TYPES.includes(body.type)) {
       return next(badRequest(`type must be one of: ${MATERIAL_TYPES.join(', ')}`))
     }
-    if (body.category !== undefined && !MATERIAL_CATEGORIES.includes(body.category)) {
-      return next(badRequest(`category must be one of: ${MATERIAL_CATEGORIES.join(', ')}`))
+    if (body.category !== undefined && !body.category.trim()) {
+      return next(badRequest('category cannot be empty'))
     }
     if (body.tags !== undefined && body.tags.length > 10) {
       return next(badRequest('tags cannot exceed 10'))
