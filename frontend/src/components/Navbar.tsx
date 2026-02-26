@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 const publicNavLinks = [
   { to: '/', label: 'Home', end: true },
   { to: '/experiments', label: 'Experiments', end: false },
+  { to: '/materials', label: 'Materials', end: false },
 ]
 
 export default function Navbar() {
