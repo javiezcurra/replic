@@ -7,25 +7,28 @@ import DesignForm, { defaultFormValues, formValuesToBody, type DesignFormValues 
 function designToFormValues(d: Design): DesignFormValues {
   return {
     title: d.title,
-    hypothesis: d.hypothesis,
+    summary: d.summary ?? '',
     discipline_tags: d.discipline_tags.join(', '),
     difficulty_level: d.difficulty_level,
+    // Materials can't be pre-populated without fetching full Material objects;
+    // existing materials are preserved through the PATCH body which is built separately.
+    materials: [],
     steps: d.steps.length ? d.steps : [{ step_number: 1, instruction: '' }],
     research_questions: d.research_questions.length
       ? d.research_questions
       : [{ id: crypto.randomUUID(), question: '', expected_data_type: 'numeric' }],
-    independent_variables: d.independent_variables.length
-      ? d.independent_variables
-      : [{ name: '', type: 'continuous', values_or_range: '' }],
-    dependent_variables: d.dependent_variables.length
-      ? d.dependent_variables
-      : [{ name: '', type: 'continuous', values_or_range: '' }],
-    controlled_variables: d.controlled_variables,
+    safety_considerations: d.safety_considerations ?? '',
+    reference_experiment_ids: d.reference_experiment_ids ?? [],
+    hypothesis: d.hypothesis ?? '',
+    independent_variables: d.independent_variables ?? [],
+    dependent_variables: d.dependent_variables ?? [],
+    controlled_variables: d.controlled_variables ?? [],
     sample_size: d.sample_size != null ? String(d.sample_size) : '',
     analysis_plan: d.analysis_plan ?? '',
     seeking_collaborators: d.seeking_collaborators,
     collaboration_notes: d.collaboration_notes ?? '',
     ethical_considerations: d.ethical_considerations ?? '',
+    disclaimers: d.disclaimers ?? '',
   }
 }
 
