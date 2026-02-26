@@ -32,7 +32,6 @@
       }
     ]
   },
-  "extensions": {},
   "functions": [
     {
       "source": "backend",
