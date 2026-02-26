@@ -1,13 +1,6 @@
 import type { Material, MaterialCategory, MaterialType } from '../types/material'
 import ImageUpload from './ImageUpload'
-
-const CATEGORY_OPTIONS: { value: MaterialCategory; label: string }[] = [
-  { value: 'glassware', label: 'Glassware' },
-  { value: 'reagent', label: 'Reagent' },
-  { value: 'equipment', label: 'Instruments' },
-  { value: 'biological', label: 'Biological' },
-  { value: 'other', label: 'Other' },
-]
+import { useCategories } from '../hooks/useCategories'
 
 export interface MaterialFormValues {
   name: string
@@ -90,6 +83,8 @@ interface Props {
 }
 
 export default function MaterialForm({ values, onChange }: Props) {
+  const { categories } = useCategories()
+
   function set<K extends keyof MaterialFormValues>(key: K, val: MaterialFormValues[K]) {
     onChange({ ...values, [key]: val })
   }
@@ -134,8 +129,10 @@ export default function MaterialForm({ values, onChange }: Props) {
             className="w-full input-sm"
           >
             <option value="">Select category…</option>
-            {CATEGORY_OPTIONS.map(({ value, label }) => (
-              <option key={value} value={value}>{label}</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.emoji ? `${cat.emoji} ${cat.name}` : cat.name}
+              </option>
             ))}
           </select>
         </div>

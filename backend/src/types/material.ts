@@ -4,7 +4,8 @@ import { Timestamp } from 'firebase-admin/firestore'
 
 export type MaterialType = 'Consumable' | 'Equipment'
 
-export type MaterialCategory = 'glassware' | 'reagent' | 'equipment' | 'biological' | 'other'
+/** Dynamically managed — see /api/categories. The value is the category slug (e.g. 'glassware'). */
+export type MaterialCategory = string
 
 // ─── Primary document ─────────────────────────────────────────────────────────
 

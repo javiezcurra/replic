@@ -1,6 +1,7 @@
 export type MaterialType = 'Consumable' | 'Equipment'
 
-export type MaterialCategory = 'glassware' | 'reagent' | 'equipment' | 'biological' | 'other'
+/** Dynamically managed — see /api/categories. Value is the category slug (e.g. 'glassware'). */
+export type MaterialCategory = string
 
 export interface Material {
   id: string

@@ -7,14 +7,7 @@ import { api } from '../lib/api'
 import type { Material, MaterialCategory, MaterialListResponse } from '../types/material'
 import MaterialCard from './MaterialCard'
 import MaterialDetailModal from './MaterialDetailModal'
-
-const CATEGORIES: { value: MaterialCategory; label: string; emoji: string }[] = [
-  { value: 'glassware',  label: 'Glassware',   emoji: '🫙' },
-  { value: 'reagent',    label: 'Reagent',     emoji: '⚗️' },
-  { value: 'equipment',  label: 'Instruments', emoji: '🔬' },
-  { value: 'biological', label: 'Biological',  emoji: '🧬' },
-  { value: 'other',      label: 'Other',       emoji: '📦' },
-]
+import { useCategories } from '../hooks/useCategories'
 
 interface Props {
   /** Set of material IDs currently in the user's lab */
@@ -27,6 +20,7 @@ interface Props {
 }
 
 export default function MaterialsDrawer({ labIds, pendingIds, onAdd, onRemove, onClose }: Props) {
+  const { categories: allCategories } = useCategories()
   const [equipmentAll, setEquipmentAll] = useState<Material[]>([])
   const [consumablesAll, setConsumablesAll] = useState<Material[]>([])
   const [loading, setLoading] = useState(true)
@@ -72,6 +66,17 @@ export default function MaterialsDrawer({ labIds, pendingIds, onAdd, onRemove, o
   const filteredConsumables = useMemo(() => consumablesAll.filter(matches), [consumablesAll, search, category])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalShown = filteredEquipment.length + filteredConsumables.length
+
+  // Only show category pills for categories that actually appear in the loaded materials
+  const usedSlugs = useMemo(() => {
+    const s = new Set([...equipmentAll, ...consumablesAll].map((m) => m.category))
+    return s
+  }, [equipmentAll, consumablesAll])
+
+  const activeCategories = useMemo(
+    () => allCategories.filter((c) => usedSlugs.has(c.id)),
+    [allCategories, usedSlugs],
+  )
 
   return (
     <>
@@ -135,12 +140,12 @@ export default function MaterialsDrawer({ labIds, pendingIds, onAdd, onRemove, o
           {/* Category pills */}
           <div className="flex flex-wrap gap-1.5">
             <CategoryPill label="All" active={category === ''} onClick={() => setCategory('')} />
-            {CATEGORIES.map((c) => (
+            {activeCategories.map((c) => (
               <CategoryPill
-                key={c.value}
-                label={`${c.emoji} ${c.label}`}
-                active={category === c.value}
-                onClick={() => setCategory(category === c.value ? '' : c.value)}
+                key={c.id}
+                label={c.emoji ? `${c.emoji} ${c.name}` : c.name}
+                active={category === c.id}
+                onClick={() => setCategory(category === c.id ? '' : c.id)}
               />
             ))}
           </div>
