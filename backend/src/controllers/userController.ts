@@ -6,6 +6,7 @@ import {
   UserProfileResponse,
   PublicUserProfileResponse,
   UpdateUserBody,
+  USER_ROLES,
 } from '../types/user'
 import { AppError } from '../middleware/errorHandler'
 
@@ -45,6 +46,8 @@ export async function upsertMe(
         photoURL: picture ?? null,
         bio: null,
         affiliation: null,
+        role: null,
+        is_admin: false,
         scores: { designer: 0, experimenter: 0, reviewer: 0 },
         createdAt: now,
         updatedAt: now,
@@ -53,13 +56,17 @@ export async function upsertMe(
       const created = await ref.get()
       res.status(201).json({ status: 'ok', data: toResponse(created.data() as UserProfile) })
     } else {
-      // Sync display fields from auth token on every sign-in
-      await ref.update({
-        displayName: name ?? snap.data()!.displayName,
-        email: email ?? snap.data()!.email,
-        photoURL: picture ?? snap.data()!.photoURL,
+      // Sync display fields from auth token; backfill new fields for existing accounts
+      const existing = snap.data()!
+      const updatePayload: Record<string, unknown> = {
+        displayName: name ?? existing.displayName,
+        email: email ?? existing.email,
+        photoURL: picture ?? existing.photoURL,
         updatedAt: FieldValue.serverTimestamp(),
-      })
+      }
+      if (existing.is_admin === undefined) updatePayload.is_admin = false
+      if (existing.role === undefined) updatePayload.role = null
+      await ref.update(updatePayload)
       const updated = await ref.get()
       res.status(200).json({ status: 'ok', data: toResponse(updated.data() as UserProfile) })
     }
@@ -102,12 +109,19 @@ export async function updateMe(
       return next(error)
     }
 
-    const { displayName, photoURL, bio, affiliation }: UpdateUserBody = req.body
+    const { displayName, photoURL, bio, affiliation, role }: UpdateUserBody = req.body
+    const validRoles = USER_ROLES.map(r => r.value) as string[]
+    if (role !== undefined && role !== null && !validRoles.includes(role)) {
+      const error: AppError = new Error(`role must be one of: ${validRoles.join(', ')}`)
+      error.statusCode = 400
+      return next(error)
+    }
     const patch: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() }
     if (displayName !== undefined) patch.displayName = displayName
     if (photoURL !== undefined) patch.photoURL = photoURL
     if (bio !== undefined) patch.bio = bio
     if (affiliation !== undefined) patch.affiliation = affiliation
+    if (role !== undefined) patch.role = role
 
     await ref.update(patch)
     const updated = await ref.get()

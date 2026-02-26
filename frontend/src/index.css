@@ -26,7 +26,8 @@
   }
 
   body {
-    @apply bg-gray-50 text-gray-900;
+    background: var(--color-surface);
+    color: var(--color-text);
   }
 }
 

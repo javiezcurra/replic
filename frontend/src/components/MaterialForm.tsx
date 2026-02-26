@@ -4,7 +4,7 @@ import ImageUpload from './ImageUpload'
 const CATEGORY_OPTIONS: { value: MaterialCategory; label: string }[] = [
   { value: 'glassware', label: 'Glassware' },
   { value: 'reagent', label: 'Reagent' },
-  { value: 'equipment', label: 'Equipment' },
+  { value: 'equipment', label: 'Instruments' },
   { value: 'biological', label: 'Biological' },
   { value: 'other', label: 'Other' },
 ]
