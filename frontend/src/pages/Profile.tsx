@@ -38,13 +38,14 @@ interface ApiResponse<T> {
 }
 
 export default function Profile() {
-  const { user } = useAuth()
+  const { user, isAdmin, refreshIsAdmin } = useAuth()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [displayName, setDisplayName] = useState('')
   const [bio, setBio] = useState('')
   const [affiliation, setAffiliation] = useState('')
   const [role, setRole] = useState<UserRole | ''>('')
   const [saving, setSaving] = useState(false)
+  const [togglingAdmin, setTogglingAdmin] = useState(false)
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
 
@@ -77,6 +78,16 @@ export default function Profile() {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to save')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleToggleAdmin() {
+    setTogglingAdmin(true)
+    try {
+      await api.patch<ApiResponse<UserProfile>>('/api/users/me', { is_admin: !isAdmin })
+      await refreshIsAdmin()
+    } finally {
+      setTogglingAdmin(false)
     }
   }
 
@@ -123,6 +134,36 @@ export default function Profile() {
             )}
           </div>
           <p className="text-sm text-muted">{profile.email}</p>
+        </div>
+      </div>
+
+      {/* ── Dev-only: self-promote to admin ── */}
+      <div className="mb-8 rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">
+              Dev tool · remove before prod
+            </p>
+            <p className="text-sm text-amber-900">
+              Admin access — currently{' '}
+              <span className="font-semibold">{isAdmin ? 'enabled' : 'disabled'}</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleToggleAdmin}
+            disabled={togglingAdmin}
+            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full
+                        border-2 transition-colors duration-200 focus:outline-none
+                        disabled:opacity-50 ${
+              isAdmin ? 'border-amber-500 bg-amber-500' : 'border-gray-300 bg-gray-200'
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow
+                          transition-transform duration-200 ${isAdmin ? 'translate-x-5' : 'translate-x-0.5'}`}
+            />
+          </button>
         </div>
       </div>
 

@@ -109,7 +109,7 @@ export async function updateMe(
       return next(error)
     }
 
-    const { displayName, photoURL, bio, affiliation, role }: UpdateUserBody = req.body
+    const { displayName, photoURL, bio, affiliation, role, is_admin }: UpdateUserBody = req.body
     const validRoles = USER_ROLES.map(r => r.value) as string[]
     if (role !== undefined && role !== null && !validRoles.includes(role)) {
       const error: AppError = new Error(`role must be one of: ${validRoles.join(', ')}`)
@@ -122,6 +122,7 @@ export async function updateMe(
     if (bio !== undefined) patch.bio = bio
     if (affiliation !== undefined) patch.affiliation = affiliation
     if (role !== undefined) patch.role = role
+    if (is_admin !== undefined) patch.is_admin = is_admin
 
     await ref.update(patch)
     const updated = await ref.get()
