@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { Material, MaterialCategory, MaterialListResponse } from '../types/material'
+import BulkUploadMaterialsModal from '../components/BulkUploadMaterialsModal'
 
 const CATEGORY_OPTIONS: { value: MaterialCategory; label: string }[] = [
   { value: 'glassware', label: 'Glassware' },
@@ -19,6 +20,7 @@ export default function Materials() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [category, setCategory] = useState('')
+  const [showBulkUpload, setShowBulkUpload] = useState(false)
 
   function buildQuery(after?: string) {
     const params = new URLSearchParams()
@@ -63,9 +65,17 @@ export default function Materials() {
           <p className="mt-2 text-gray-600">Browse the catalog of consumables and equipment used in experiment designs.</p>
         </div>
         {user && (
-          <Link to="/materials/new" className="btn-primary text-sm shrink-0">
-            Submit material
-          </Link>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={() => setShowBulkUpload(true)}
+              className="btn-secondary text-sm"
+            >
+              Bulk upload
+            </button>
+            <Link to="/materials/new" className="btn-primary text-sm">
+              Submit material
+            </Link>
+          </div>
         )}
       </div>
 
@@ -115,6 +125,15 @@ export default function Materials() {
             </div>
           )}
         </>
+      )}
+      {showBulkUpload && (
+        <BulkUploadMaterialsModal
+          onClose={() => setShowBulkUpload(false)}
+          onComplete={() => {
+            setShowBulkUpload(false)
+            fetchMaterials()
+          }}
+        />
       )}
     </div>
   )
