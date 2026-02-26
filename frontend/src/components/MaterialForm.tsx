@@ -1,4 +1,5 @@
 import type { MaterialCategory, MaterialType } from '../types/material'
+import ImageUpload from './ImageUpload'
 
 const CATEGORY_OPTIONS: { value: MaterialCategory; label: string }[] = [
   { value: 'glassware', label: 'Glassware' },
@@ -12,12 +13,13 @@ export interface MaterialFormValues {
   name: string
   type: MaterialType | ''
   category: MaterialCategory | ''
-  unit: string
   description: string
+  link: string
   supplier: string
   typical_cost_usd: string  // string for controlled input
   safety_notes: string
   tags: string              // comma-separated
+  image_url: string
 }
 
 export function defaultMaterialFormValues(): MaterialFormValues {
@@ -25,12 +27,13 @@ export function defaultMaterialFormValues(): MaterialFormValues {
     name: '',
     type: '',
     category: '',
-    unit: '',
     description: '',
+    link: '',
     supplier: '',
     typical_cost_usd: '',
     safety_notes: '',
     tags: '',
+    image_url: '',
   }
 }
 
@@ -39,12 +42,13 @@ export function formValuesToBody(v: MaterialFormValues) {
     name: v.name,
     type: v.type as MaterialType,
     category: v.category as MaterialCategory,
-    ...(v.unit ? { unit: v.unit } : {}),
     ...(v.description ? { description: v.description } : {}),
+    ...(v.link ? { link: v.link } : {}),
     ...(v.supplier ? { supplier: v.supplier } : {}),
     ...(v.typical_cost_usd ? { typical_cost_usd: parseFloat(v.typical_cost_usd) } : {}),
     ...(v.safety_notes ? { safety_notes: v.safety_notes } : {}),
     tags: v.tags.split(',').map((t) => t.trim()).filter(Boolean),
+    ...(v.image_url ? { image_url: v.image_url } : {}),
   }
 }
 
@@ -105,30 +109,16 @@ export default function MaterialForm({ values, onChange }: Props) {
         </div>
       </div>
 
-      {/* Unit + Supplier */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Unit <span className="text-gray-400 font-normal">(default: unit)</span>
-          </label>
-          <input
-            type="text"
-            value={values.unit}
-            onChange={(e) => set('unit', e.target.value)}
-            placeholder="unit, mL, g, …"
-            className="w-full input-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
-          <input
-            type="text"
-            value={values.supplier}
-            onChange={(e) => set('supplier', e.target.value)}
-            placeholder="e.g. Fisher Scientific"
-            className="w-full input-sm"
-          />
-        </div>
+      {/* Supplier */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+        <input
+          type="text"
+          value={values.supplier}
+          onChange={(e) => set('supplier', e.target.value)}
+          placeholder="e.g. Fisher Scientific"
+          className="w-full input-sm"
+        />
       </div>
 
       {/* Description */}
@@ -139,6 +129,18 @@ export default function MaterialForm({ values, onChange }: Props) {
           value={values.description}
           onChange={(e) => set('description', e.target.value)}
           className="w-full input-sm resize-y"
+        />
+      </div>
+
+      {/* Link */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Product / supplier link</label>
+        <input
+          type="url"
+          value={values.link}
+          onChange={(e) => set('link', e.target.value)}
+          placeholder="https://"
+          className="w-full input-sm"
         />
       </div>
 
@@ -179,6 +181,12 @@ export default function MaterialForm({ values, onChange }: Props) {
           placeholder="chemistry, lab, glassware"
           className="w-full input-sm"
         />
+      </div>
+
+      {/* Image */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Image</label>
+        <ImageUpload value={values.image_url} onChange={(url) => set('image_url', url)} />
       </div>
     </div>
   )

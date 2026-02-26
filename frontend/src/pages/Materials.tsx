@@ -126,29 +126,36 @@ function MaterialCard({ material }: { material: Material }) {
       to={`/materials/${material.id}`}
       className="block card p-5 hover:shadow-md transition-shadow"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-semibold text-gray-900">{material.name}</h3>
-            {material.is_verified && (
-              <span className="text-xs font-medium bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
-                Verified
-              </span>
+      <div className="flex items-start gap-4">
+        {material.image_url && (
+          <img
+            src={material.image_url}
+            alt={material.name}
+            className="h-14 w-14 object-cover rounded-lg border border-gray-200 shrink-0"
+          />
+        )}
+        <div className="flex-1 min-w-0 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-semibold text-gray-900">{material.name}</h3>
+              {material.is_verified && (
+                <span className="text-xs font-medium bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
+                  Verified
+                </span>
+              )}
+            </div>
+            {material.description && (
+              <p className="mt-1 text-sm text-gray-600 line-clamp-2">{material.description}</p>
             )}
           </div>
-          {material.description && (
-            <p className="mt-1 text-sm text-gray-600 line-clamp-2">{material.description}</p>
-          )}
+          <span className="shrink-0 text-xs font-medium bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full capitalize">
+            {material.type}
+          </span>
         </div>
-        <span className="shrink-0 text-xs font-medium bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full capitalize">
-          {material.type}
-        </span>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
         <span className="capitalize">{material.category}</span>
-        <span>·</span>
-        <span>{material.unit}</span>
         {material.typical_cost_usd != null && (
           <>
             <span>·</span>
