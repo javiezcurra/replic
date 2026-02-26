@@ -52,5 +52,6 @@ export interface UpdateUserBody {
   bio?: string | null
   affiliation?: string | null
   role?: UserRole | null
-  // is_admin is intentionally excluded — not user-settable
+  /** Dev-only self-promotion toggle — remove before production hardening */
+  is_admin?: boolean
 }

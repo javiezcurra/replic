@@ -15,6 +15,8 @@ interface AuthContextValue {
   loading: boolean
   signIn: () => Promise<void>
   signOut: () => Promise<void>
+  /** Re-fetches the user profile and updates isAdmin. Call after toggling admin status. */
+  refreshIsAdmin: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -55,12 +57,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function refreshIsAdmin() {
+    try {
+      const res = await api.get<{ status: string; data: { is_admin: boolean } }>('/api/users/me')
+      setIsAdmin(res.data.is_admin ?? false)
+    } catch {
+      // ignore
+    }
+  }
+
   async function signOut() {
     await firebaseSignOut(auth)
   }
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, isAdmin, loading, signIn, signOut, refreshIsAdmin }}>
       {children}
     </AuthContext.Provider>
   )
