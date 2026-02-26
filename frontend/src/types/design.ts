@@ -95,6 +95,7 @@ export interface ForkDesignBody {
 }
 
 export interface DesignListResponse {
-  designs: Design[]
-  cursor?: string
+  status: string
+  data: Design[]
+  count: number
 }
