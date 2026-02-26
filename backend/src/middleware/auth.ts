@@ -30,6 +30,28 @@ export async function requireAuth(
   }
 }
 
+/**
+ * Like requireAuth but non-fatal: sets req.user when a valid Bearer token is
+ * present, then continues. Used for public routes that also serve additional
+ * content to authenticated users (e.g. draft visibility on GET /designs/:id).
+ */
+export async function optionalAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const authHeader = req.headers.authorization
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7)
+    try {
+      req.user = await adminAuth.verifyIdToken(token)
+    } catch {
+      // Invalid or expired token — proceed as unauthenticated
+    }
+  }
+  next()
+}
+
 /** Must be used after requireAuth. Returns 403 if the caller is not an admin. */
 export async function requireAdmin(
   req: Request,

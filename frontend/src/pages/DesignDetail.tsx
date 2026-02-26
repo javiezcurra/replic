@@ -96,12 +96,25 @@ export default function DesignDetail() {
     )
   }
 
-  if (notFound || !design) {
+  if (notFound) {
     return (
       <div className="max-w-2xl mx-auto py-20 px-4 text-center">
         <p className="text-4xl mb-4">🔍</p>
         <h1 className="text-xl font-semibold text-ink">Design not found</h1>
         <p className="mt-2 text-sm text-muted">It may be a private draft or may not exist.</p>
+        <Link to="/experiments" className="mt-4 inline-block btn-secondary text-sm">
+          Browse experiments
+        </Link>
+      </div>
+    )
+  }
+
+  if (error && !design) {
+    return (
+      <div className="max-w-2xl mx-auto py-20 px-4 text-center">
+        <p className="text-4xl mb-4">⚠️</p>
+        <h1 className="text-xl font-semibold text-ink">Could not load design</h1>
+        <p className="mt-2 text-sm text-muted">{error}</p>
         <Link to="/experiments" className="mt-4 inline-block btn-secondary text-sm">
           Browse experiments
         </Link>
