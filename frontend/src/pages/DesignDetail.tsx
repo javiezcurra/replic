@@ -64,6 +64,13 @@ export default function DesignDetail() {
   // Edit warning modal (shown before navigating to edit for published designs with no draft yet)
   const [showEditWarning, setShowEditWarning] = useState(false)
 
+  // Pipeline & watchlist
+  const [inPipeline, setInPipeline] = useState<boolean | null>(null)
+  const [pipelineLoading, setPipelineLoading] = useState(false)
+  const [inWatchlist, setInWatchlist] = useState<boolean | null>(null)
+  const [watchlistLoading, setWatchlistLoading] = useState(false)
+  const [startToast, setStartToast] = useState(false)
+
   async function loadMaterials(materials: DesignMaterial[]) {
     if (!materials.length) return
     const results = await Promise.allSettled(
@@ -124,6 +131,18 @@ export default function DesignDetail() {
           .then(({ data: s }) => setReviewCount(s.reviewCount))
           .catch(() => {})
       }
+      // Fetch pipeline/watchlist status for authenticated non-authors on published designs
+      if (user && res.data.status === 'published') {
+        const isA = res.data.author_ids.includes(user.uid)
+        if (!isA) {
+          api.get<{ status: string; data: { inPipeline: boolean } }>(`/api/users/me/pipeline/${id}`)
+            .then(({ data: d }) => setInPipeline(d.inPipeline))
+            .catch(() => {})
+          api.get<{ status: string; data: { inWatchlist: boolean } }>(`/api/users/me/watchlist/${id}`)
+            .then(({ data: d }) => setInWatchlist(d.inWatchlist))
+            .catch(() => {})
+        }
+      }
     } catch (err: any) {
       if (err?.status === 404) setNotFound(true)
       else setError(err?.message ?? 'Failed to load')
@@ -173,6 +192,44 @@ export default function DesignDetail() {
     } finally {
       setPublishing(false)
     }
+  }
+
+  async function handlePipelineToggle() {
+    if (!user) { navigate('/login'); return }
+    setPipelineLoading(true)
+    try {
+      if (inPipeline) {
+        await api.delete(`/api/users/me/pipeline/${id}`)
+        setInPipeline(false)
+      } else {
+        await api.post(`/api/users/me/pipeline/${id}`)
+        setInPipeline(true)
+      }
+    } catch { /* non-critical */ } finally {
+      setPipelineLoading(false)
+    }
+  }
+
+  async function handleWatchlistToggle() {
+    if (!user) { navigate('/login'); return }
+    setWatchlistLoading(true)
+    try {
+      if (inWatchlist) {
+        await api.delete(`/api/users/me/watchlist/${id}`)
+        setInWatchlist(false)
+      } else {
+        await api.post(`/api/users/me/watchlist/${id}`)
+        setInWatchlist(true)
+      }
+    } catch { /* non-critical */ } finally {
+      setWatchlistLoading(false)
+    }
+  }
+
+  function handleStartExperiment() {
+    if (!user) { navigate('/login'); return }
+    setStartToast(true)
+    setTimeout(() => setStartToast(false), 3000)
   }
 
   function handleEditClick() {
@@ -681,18 +738,59 @@ export default function DesignDetail() {
               )}
             </div>
 
+            {/* "Start Experiment" toast */}
+            {startToast && (
+              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl shadow-lg text-sm font-medium text-white"
+                style={{ background: 'var(--color-dark)' }}>
+                Experiment execution coming soon!
+              </div>
+            )}
+
             {/* Actions */}
             <div className="card p-5">
               <SectionLabel>Actions</SectionLabel>
 
               {/* Community actions */}
               <div className="space-y-2">
-                <button className="w-full btn-primary text-sm justify-center" disabled>
-                  Run Experiment
+                {/* Start Experiment — published only, non-functional placeholder */}
+                <button
+                  onClick={design.status === 'published' ? handleStartExperiment : undefined}
+                  disabled={design.status !== 'published'}
+                  className="w-full btn-primary text-sm justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Start Experiment
                 </button>
-                <button className="w-full btn-secondary text-sm justify-center" disabled>
-                  Add to My Lab
-                </button>
+
+                {/* Pipeline — only for non-authors on published designs */}
+                {design.status === 'published' && !isAuthor && (
+                  <button
+                    onClick={handlePipelineToggle}
+                    disabled={pipelineLoading}
+                    className="w-full btn-secondary text-sm justify-center disabled:opacity-50"
+                  >
+                    {pipelineLoading
+                      ? '…'
+                      : inPipeline
+                      ? 'Remove from Pipeline'
+                      : 'Add to Pipeline'}
+                  </button>
+                )}
+
+                {/* Watchlist — only for non-authors on published designs */}
+                {design.status === 'published' && !isAuthor && (
+                  <button
+                    onClick={handleWatchlistToggle}
+                    disabled={watchlistLoading}
+                    className="w-full btn-secondary text-sm justify-center disabled:opacity-50"
+                  >
+                    {watchlistLoading
+                      ? '…'
+                      : inWatchlist
+                      ? 'Remove from Watchlist'
+                      : 'Add to Watchlist'}
+                  </button>
+                )}
+
                 {design.status === 'published' && !isAuthor && user && (
                   <button
                     onClick={() => setActiveTab('reviews')}

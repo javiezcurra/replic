@@ -385,6 +385,7 @@ function CoauthorsDrawer({
   onRequestRemove: (c: CoauthorEntry) => void
   onClose: () => void
 }) {
+  const { user } = useAuth()
   const [collaborators, setCollaborators] = useState<CollaboratorEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -405,11 +406,26 @@ function CoauthorsDrawer({
     return () => document.removeEventListener('keydown', handleKey)
   }, [onClose])
 
+  // Build the display list: collaborators + inject the current user if they are
+  // a co-author but not already present in the collaborators list.
+  const displayList = useMemo(() => {
+    const list: Array<{ uid: string; displayName: string; affiliation: string | null }> =
+      collaborators.map((c) => ({ uid: c.uid, displayName: c.displayName, affiliation: c.affiliation }))
+    if (
+      user &&
+      selectedUids.has(user.uid) &&
+      !collaborators.some((c) => c.uid === user.uid)
+    ) {
+      list.unshift({ uid: user.uid, displayName: user.displayName ?? user.uid, affiliation: null })
+    }
+    return list
+  }, [collaborators, selectedUids, user])
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
-    if (!q) return collaborators
-    return collaborators.filter((c) => c.displayName.toLowerCase().includes(q))
-  }, [collaborators, search])
+    if (!q) return displayList
+    return displayList.filter((c) => c.displayName.toLowerCase().includes(q))
+  }, [displayList, search])
 
   return (
     <>
@@ -452,7 +468,7 @@ function CoauthorsDrawer({
             </div>
           ) : filtered.length === 0 ? (
             <p className="text-sm text-center py-10" style={{ color: 'var(--color-text-muted)' }}>
-              {collaborators.length === 0
+              {displayList.length === 0
                 ? 'You have no collaborators yet. Connect with researchers first.'
                 : 'No collaborators match your search.'}
             </p>
