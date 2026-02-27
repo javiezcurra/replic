@@ -121,6 +121,12 @@ Full type definitions: `/backend/src/types/design.ts` and `/backend/src/types/us
 
 ---
 
+## Git Workflow
+
+After pushing any branch, **always open a pull request** targeting `main`. Include a short summary of changes and a test plan checklist in the PR body.
+
+---
+
 ## Repo Structure
 
 ```
