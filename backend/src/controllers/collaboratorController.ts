@@ -244,6 +244,30 @@ export async function listCollaborators(
   }
 }
 
+// DELETE /api/users/me/collaborators/:uid
+// Removes a collaborator from both sides atomically.
+export async function removeCollaborator(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const callerUid = req.user!.uid
+    const targetUid = req.params.uid
+
+    if (callerUid === targetUid) return next(badRequest('Cannot remove yourself'))
+
+    const batch = adminDb.batch()
+    batch.delete(adminDb.collection(USERS).doc(callerUid).collection('collaborators').doc(targetUid))
+    batch.delete(adminDb.collection(USERS).doc(targetUid).collection('collaborators').doc(callerUid))
+    await batch.commit()
+
+    res.status(200).json({ status: 'ok' })
+  } catch (err) {
+    next(err)
+  }
+}
+
 // GET /api/users/:uid/relationship
 // Returns relationship state between the caller and the target user.
 export async function getRelationship(

@@ -160,6 +160,7 @@ export async function createDesign(
       disclaimers: body.disclaimers ?? '',
       seeking_collaborators: body.seeking_collaborators ?? false,
       collaboration_notes: body.collaboration_notes,
+      coauthor_uids: body.coauthor_uids ?? [],
       // System-managed
       status: 'draft',
       is_public: false,

@@ -12,6 +12,7 @@ import type {
   VariableType,
 } from '../types/design'
 import type { Material } from '../types/material'
+import type { CollaboratorEntry } from '../types/user'
 import MaterialsDrawer from './MaterialsDrawer'
 
 const DIFFICULTY_OPTIONS: DifficultyLevel[] = [
@@ -32,6 +33,12 @@ export interface DesignMaterialEntry {
 interface DesignRef {
   id: string
   title: string
+}
+
+// Co-author entry stored in the form
+export interface CoauthorEntry {
+  uid: string
+  displayName: string
 }
 
 export interface DesignFormValues {
@@ -56,6 +63,7 @@ export interface DesignFormValues {
   collaboration_notes: string
   ethical_considerations: string
   disclaimers: string
+  coauthors: CoauthorEntry[]
 }
 
 export function defaultFormValues(): DesignFormValues {
@@ -79,6 +87,7 @@ export function defaultFormValues(): DesignFormValues {
     collaboration_notes: '',
     ethical_considerations: '',
     disclaimers: '',
+    coauthors: [],
   }
 }
 
@@ -114,6 +123,7 @@ export function formValuesToBody(v: DesignFormValues): CreateDesignBody {
     ...(v.collaboration_notes ? { collaboration_notes: v.collaboration_notes } : {}),
     ...(v.ethical_considerations ? { ethical_considerations: v.ethical_considerations } : {}),
     ...(v.disclaimers ? { disclaimers: v.disclaimers } : {}),
+    coauthor_uids: v.coauthors.map((c) => c.uid),
   }
 }
 
@@ -355,6 +365,279 @@ function DesignReferencePicker({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── CoauthorsDrawer ──────────────────────────────────────────────────────────
+function CoauthorsDrawer({
+  selectedUids,
+  onAdd,
+  onRemove,
+  onClose,
+}: {
+  selectedUids: Set<string>
+  onAdd: (c: CoauthorEntry) => void
+  onRemove: (uid: string) => void
+  onClose: () => void
+}) {
+  const [collaborators, setCollaborators] = useState<CollaboratorEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    api
+      .get<{ status: string; data: CollaboratorEntry[] }>('/api/users/me/collaborators')
+      .then(({ data }) => setCollaborators(data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [onClose])
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    if (!q) return collaborators
+    return collaborators.filter((c) => c.displayName.toLowerCase().includes(q))
+  }, [collaborators, search])
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
+      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm bg-white shadow-xl flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+          <h2 className="font-semibold text-base" style={{ color: 'var(--color-dark)' }}>
+            Add Co-Authors
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="px-4 py-3 border-b border-gray-100">
+          <div className="relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-400"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search collaborators…"
+              className="w-full pl-9 input-sm"
+            />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-6 h-6 border-4 border-t-transparent rounded-full animate-spin"
+                style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }} />
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="text-sm text-center py-10" style={{ color: 'var(--color-text-muted)' }}>
+              {collaborators.length === 0
+                ? 'You have no collaborators yet. Connect with researchers first.'
+                : 'No collaborators match your search.'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {filtered.map((c) => {
+                const isSelected = selectedUids.has(c.uid)
+                return (
+                  <li key={c.uid} className="flex items-center gap-3 px-4 py-3">
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                      style={{ background: 'var(--color-dark)' }}
+                    >
+                      {c.displayName?.[0]?.toUpperCase() ?? '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                        {c.displayName}
+                      </p>
+                      {c.affiliation && (
+                        <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
+                          {c.affiliation}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        isSelected
+                          ? onRemove(c.uid)
+                          : onAdd({ uid: c.uid, displayName: c.displayName })
+                      }
+                      className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white
+                                  transition-colors ${isSelected ? 'bg-red-400 hover:bg-red-500' : 'hover:opacity-80'}`}
+                      style={isSelected ? {} : { background: 'var(--color-primary)' }}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                          d={isSelected ? 'M6 18L18 6M6 6l12 12' : 'M12 4v16m8-8H4'} />
+                      </svg>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ─── CoauthorsPicker ──────────────────────────────────────────────────────────
+function CoauthorsPicker({
+  selected,
+  onAdd,
+  onRemove,
+}: {
+  selected: CoauthorEntry[]
+  onAdd: (c: CoauthorEntry) => void
+  onRemove: (uid: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [collaborators, setCollaborators] = useState<CollaboratorEntry[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [showDrawer, setShowDrawer] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const selectedUids = useMemo(() => new Set(selected.map((c) => c.uid)), [selected])
+
+  function loadCollaborators() {
+    if (loaded || loading) return
+    setLoading(true)
+    api
+      .get<{ status: string; data: CollaboratorEntry[] }>('/api/users/me/collaborators')
+      .then(({ data }) => setCollaborators([...data].sort((a, b) => a.displayName.localeCompare(b.displayName))))
+      .catch(() => {})
+      .finally(() => { setLoaded(true); setLoading(false) })
+  }
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase().trim()
+    const available = collaborators.filter((c) => !selectedUids.has(c.uid))
+    if (!q) return available.slice(0, 8)
+    return available.filter((c) => c.displayName.toLowerCase().includes(q)).slice(0, 8)
+  }, [collaborators, query, selectedUids])
+
+  return (
+    <div>
+      {/* Selected chips */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {selected.map((c) => (
+            <span
+              key={c.uid}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs
+                         bg-brand-50 text-brand-700 border border-brand-200"
+            >
+              {c.displayName}
+              <button
+                type="button"
+                onClick={() => onRemove(c.uid)}
+                className="text-brand-400 hover:text-brand-700 leading-none"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2 items-start">
+        {/* Type-ahead input */}
+        <div className="relative flex-1" ref={containerRef}>
+          <input
+            type="text"
+            value={query}
+            placeholder="Search your collaborators…"
+            className="w-full input-sm"
+            onFocus={() => { loadCollaborators(); setOpen(true) }}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
+          />
+          {open && (
+            <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-white border border-gray-200
+                            rounded-xl shadow-lg overflow-hidden max-h-56 overflow-y-auto">
+              {loading && <p className="px-3 py-2 text-xs text-gray-400">Loading…</p>}
+              {!loading && filtered.length === 0 && (
+                <p className="px-3 py-2 text-xs text-gray-400">
+                  {collaborators.length === 0
+                    ? 'No collaborators yet — connect with researchers first.'
+                    : 'No matching collaborators.'}
+                </p>
+              )}
+              {filtered.map((c) => (
+                <button
+                  key={c.uid}
+                  type="button"
+                  onClick={() => {
+                    onAdd({ uid: c.uid, displayName: c.displayName })
+                    setQuery('')
+                    setOpen(false)
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-800"
+                >
+                  {c.displayName}
+                  {c.affiliation && (
+                    <span className="ml-2 text-xs text-gray-400">{c.affiliation}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Drawer trigger */}
+        <button
+          type="button"
+          onClick={() => setShowDrawer(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 border-dashed
+                     border-gray-300 text-sm text-gray-600 hover:border-brand-400
+                     hover:text-brand-600 transition-colors shrink-0"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Browse
+        </button>
+      </div>
+
+      {showDrawer && (
+        <CoauthorsDrawer
+          selectedUids={selectedUids}
+          onAdd={onAdd}
+          onRemove={onRemove}
+          onClose={() => setShowDrawer(false)}
+        />
+      )}
     </div>
   )
 }
@@ -637,6 +920,22 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
 
             {/* ── Attribution ─────────────────────────────────────────────── */}
             <SubHeader>Attribution</SubHeader>
+
+            <div>
+              <FieldLabel
+                label="Co-Authors"
+                tooltip="Add collaborators who contributed to this design. Only users you are already connected with as collaborators can be added."
+              />
+              <CoauthorsPicker
+                selected={values.coauthors}
+                onAdd={(c) => {
+                  if (!values.coauthors.find((x) => x.uid === c.uid)) {
+                    set('coauthors', [...values.coauthors, c])
+                  }
+                }}
+                onRemove={(uid) => set('coauthors', values.coauthors.filter((c) => c.uid !== uid))}
+              />
+            </div>
 
             <div>
               <FieldLabel

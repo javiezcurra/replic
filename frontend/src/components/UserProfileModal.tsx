@@ -7,9 +7,10 @@ import { api } from '../lib/api'
 interface Props {
   profile: UserPublicProfile
   onClose: () => void
+  onCollaboratorRemoved?: () => void
 }
 
-export default function UserProfileModal({ profile, onClose }: Props) {
+export default function UserProfileModal({ profile, onClose, onCollaboratorRemoved }: Props) {
   const { user } = useAuth()
   const isSelf = user?.uid === profile.uid
 
@@ -69,6 +70,20 @@ export default function UserProfileModal({ profile, onClose }: Props) {
     }
   }
 
+  async function handleRemove() {
+    if (actionLoading) return
+    setActionLoading(true)
+    try {
+      await api.delete(`/api/users/me/collaborators/${profile.uid}`)
+      setRelationship({ isCollaborator: false, pendingRequestId: null, pendingDirection: null })
+      onCollaboratorRemoved?.()
+    } catch {
+      //
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   async function handleDecline() {
     if (!relationship?.pendingRequestId || actionLoading) return
     setActionLoading(true)
@@ -89,15 +104,25 @@ export default function UserProfileModal({ profile, onClose }: Props) {
 
     if (relationship?.isCollaborator) {
       return (
-        <span
-          className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg"
-          style={{ background: 'color-mix(in srgb, var(--color-accent) 30%, white)', color: 'var(--color-secondary)' }}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-          </svg>
-          Collaborator
-        </span>
+        <div className="flex items-center justify-between w-full">
+          <span
+            className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg"
+            style={{ background: 'color-mix(in srgb, var(--color-accent) 30%, white)', color: 'var(--color-secondary)' }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+            Collaborator
+          </span>
+          <button
+            onClick={handleRemove}
+            disabled={actionLoading}
+            className="text-xs font-medium hover:opacity-80 transition-opacity disabled:opacity-40"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            Remove
+          </button>
+        </div>
       )
     }
 
