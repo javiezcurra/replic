@@ -66,7 +66,7 @@ export default function MyLab() {
   useEffect(() => {
     async function fetchAll() {
       const [designsRes, pipelineRes, watchlistRes, colsRes, labRes] = await Promise.allSettled([
-        api.get<{ status: string; data: Design[] }>('/api/designs/mine'),
+        api.get<{ status: string; data: Design[] }>('/api/designs/me/list'),
         api.get<{ status: string; data: PipelineEntry[] }>('/api/users/me/pipeline'),
         api.get<{ status: string; data: WatchlistEntry[] }>('/api/users/me/watchlist'),
         api.get<{ status: string; data: CollaboratorEntry[] }>('/api/users/me/collaborators'),
