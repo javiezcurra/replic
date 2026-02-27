@@ -155,6 +155,7 @@ interface Props {
   designId: string
   design: Design
   materialMap: Record<string, Material>
+  existingReview?: Review
   onSubmitted: (review: Review) => void
   onCancel: () => void
 }
@@ -165,22 +166,37 @@ export default function ReviewForm({
   designId,
   design,
   materialMap,
+  existingReview,
   onSubmitted,
   onCancel,
 }: Props) {
-  const [generalComment, setGeneralComment] = useState('')
-  const [endorsement, setEndorsement] = useState(false)
-  const [readinessSignal, setReadinessSignal] = useState<ReadinessSignal | null>(null)
+  const [generalComment, setGeneralComment] = useState(existingReview?.generalComment ?? '')
+  const [endorsement, setEndorsement] = useState(existingReview?.endorsement ?? false)
+  const [readinessSignal, setReadinessSignal] = useState<ReadinessSignal | null>(
+    existingReview?.readinessSignal ?? null,
+  )
   const [suggestions, setSuggestions] = useState<SuggestionEntry[]>([])
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
   function addSuggestion() {
+    // Collapse all existing blocks then add a new expanded one
+    setCollapsedIds(new Set(suggestions.map((s) => s.localId)))
     setSuggestions((prev) => [...prev, newEntry()])
   }
 
   function removeSuggestion(localId: string) {
     setSuggestions((prev) => prev.filter((s) => s.localId !== localId))
+    setCollapsedIds((prev) => { const next = new Set(prev); next.delete(localId); return next })
+  }
+
+  function toggleCollapse(localId: string) {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev)
+      next.has(localId) ? next.delete(localId) : next.add(localId)
+      return next
+    })
   }
 
   function updateSuggestion(localId: string, patch: Partial<SuggestionEntry>) {
@@ -329,22 +345,19 @@ export default function ReviewForm({
 
       {/* Field suggestions */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium text-ink">
-            Field suggestions{' '}
-            <span className="text-muted font-normal">(optional)</span>
+        <p className="text-sm font-medium text-ink mb-3">
+          Field suggestions{' '}
+          <span className="text-muted font-normal">(optional)</span>
+        </p>
+
+        {existingReview && (existingReview.suggestions?.length ?? 0) > 0 && suggestions.length === 0 && (
+          <p className="text-xs text-muted bg-surface border border-surface-2 rounded-lg px-3 py-2 mb-3">
+            Your previous {existingReview.suggestions.length} suggestion{existingReview.suggestions.length !== 1 ? 's' : ''} will be replaced when you update.
           </p>
-          <button
-            type="button"
-            onClick={addSuggestion}
-            className="text-xs text-primary hover:underline font-medium"
-          >
-            + Add suggestion
-          </button>
-        </div>
+        )}
 
         {suggestions.length > 0 && (
-          <div className="space-y-4">
+          <div className="space-y-3 mb-3">
             {suggestions.map((s, i) => (
               <SuggestionBlock
                 key={s.localId}
@@ -352,6 +365,8 @@ export default function ReviewForm({
                 entry={s}
                 design={design}
                 materialMap={materialMap}
+                collapsed={collapsedIds.has(s.localId)}
+                onToggleCollapse={() => toggleCollapse(s.localId)}
                 onUpdate={(patch) => updateSuggestion(s.localId, patch)}
                 onToggleType={(type) => toggleSuggestionType(s.localId, type)}
                 onRemove={() => removeSuggestion(s.localId)}
@@ -359,6 +374,14 @@ export default function ReviewForm({
             ))}
           </div>
         )}
+
+        <button
+          type="button"
+          onClick={addSuggestion}
+          className="text-xs text-primary hover:underline font-medium"
+        >
+          + Add suggestion
+        </button>
       </div>
 
       {error && (
@@ -373,7 +396,9 @@ export default function ReviewForm({
           disabled={submitting}
           className="btn-primary text-sm disabled:opacity-50"
         >
-          {submitting ? 'Submitting…' : 'Submit review'}
+          {submitting
+            ? (existingReview ? 'Updating…' : 'Submitting…')
+            : (existingReview ? 'Update review' : 'Submit review')}
         </button>
         <button
           type="button"
@@ -395,9 +420,17 @@ interface SuggestionBlockProps {
   entry: SuggestionEntry
   design: Design
   materialMap: Record<string, Material>
+  collapsed: boolean
+  onToggleCollapse: () => void
   onUpdate: (patch: Partial<SuggestionEntry>) => void
   onToggleType: (type: SuggestionType) => void
   onRemove: () => void
+}
+
+function getFieldLabel(entry: SuggestionEntry): string {
+  if (entry.useNewField) return entry.newFieldName.trim() || 'Custom field'
+  if (!entry.selectedField) return ''
+  return FIELD_OPTIONS.find((o) => o.value === entry.selectedField)?.label ?? entry.selectedField
 }
 
 function SuggestionBlock({
@@ -405,6 +438,8 @@ function SuggestionBlock({
   entry,
   design,
   materialMap,
+  collapsed,
+  onToggleCollapse,
   onUpdate,
   onToggleType,
   onRemove,
@@ -462,159 +497,177 @@ function SuggestionBlock({
     ? '__new__'
     : entry.selectedField || ''
 
+  const fieldLabel = getFieldLabel(entry)
+
   return (
     <div className="rounded-xl border border-surface-2 bg-white p-4 space-y-3">
-      {/* Header */}
+      {/* Header — always visible */}
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted">
-          Suggestion {index + 1}
-        </p>
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="flex items-center gap-2 text-left flex-1 min-w-0"
+        >
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted shrink-0">
+            Suggestion {index + 1}
+          </p>
+          {collapsed && fieldLabel && (
+            <p className="text-xs text-ink truncate">— {fieldLabel}</p>
+          )}
+          <span className="text-xs text-muted ml-auto shrink-0">
+            {collapsed ? '▸' : '▾'}
+          </span>
+        </button>
         <button
           type="button"
           onClick={onRemove}
-          className="text-xs text-muted hover:text-red-600 transition-colors"
+          className="text-xs text-muted hover:text-red-600 transition-colors ml-3 shrink-0"
         >
           Remove
         </button>
       </div>
 
-      {/* Field selector */}
-      <div>
-        <label className="block text-xs font-medium text-ink mb-1">Field</label>
-        <select
-          value={selectorValue}
-          onChange={(e) => handleFieldChange(e.target.value)}
-          className="w-full input-sm"
-        >
-          <option value="">Select a field…</option>
-          {FIELD_OPTIONS.map(({ value, label }) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
-        </select>
+      {!collapsed && (
+        <>
+          {/* Field selector */}
+          <div>
+            <label className="block text-xs font-medium text-ink mb-1">Field</label>
+            <select
+              value={selectorValue}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className="w-full input-sm"
+            >
+              <option value="">Select a field…</option>
+              {FIELD_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
 
-        {/* Custom field name input */}
-        {entry.useNewField && (
-          <input
-            type="text"
-            value={entry.newFieldName}
-            onChange={(e) => onUpdate({ newFieldName: e.target.value })}
-            placeholder="Field name…"
-            className="w-full input-sm mt-2"
-          />
-        )}
-      </div>
-
-      {/* Field-type-specific input */}
-      {entry.selectedField === 'materials' && (
-        <MaterialsInput
-          design={design}
-          materialMap={materialMap}
-          removeMaterialIds={entry.removeMaterialIds}
-          addMaterialText={entry.addMaterialText}
-          onToggleRemove={(id) =>
-            onUpdate({
-              removeMaterialIds: entry.removeMaterialIds.includes(id)
-                ? entry.removeMaterialIds.filter((x) => x !== id)
-                : [...entry.removeMaterialIds, id],
-            })
-          }
-          onAddTextChange={(text) => onUpdate({ addMaterialText: text })}
-        />
-      )}
-
-      {SIMPLE_TEXT_FIELDS.has(entry.selectedField) && (
-        <SimpleTextInput
-          currentValue={getSimpleFieldValue(design, entry.selectedField)}
-          proposedText={entry.proposedText}
-          onChange={(text) => onUpdate({ proposedText: text })}
-        />
-      )}
-
-      {entry.selectedField === 'steps' && (
-        <ListItemInput
-          label="step"
-          items={design.steps.map((s) => `Step ${s.step_number}: ${s.instruction}`)}
-          currentTexts={design.steps.map((s) => s.instruction)}
-          selectedIndex={entry.selectedIndex}
-          isAddingNew={entry.isAddingNewItem}
-          proposedText={entry.proposedText}
-          onSelectIndex={handleSubIndexSelect}
-          onProposedChange={(text) => onUpdate({ proposedText: text })}
-          addNewLabel="Propose a new step"
-          proposedPlaceholder="Write the new step instruction…"
-          replacePlaceholder="Proposed replacement for this step…"
-        />
-      )}
-
-      {entry.selectedField === 'research_questions' && (
-        <ListItemInput
-          label="question"
-          items={design.research_questions.map((q, i) => `Q${i + 1}: ${q.question}`)}
-          currentTexts={design.research_questions.map((q) => q.question)}
-          selectedIndex={entry.selectedIndex}
-          isAddingNew={entry.isAddingNewItem}
-          proposedText={entry.proposedText}
-          onSelectIndex={handleSubIndexSelect}
-          onProposedChange={(text) => onUpdate({ proposedText: text })}
-          addNewLabel="Propose a new research question"
-          proposedPlaceholder="Write the new research question…"
-          replacePlaceholder="Proposed replacement for this question…"
-        />
-      )}
-
-      {(entry.selectedField === 'independent_variables' ||
-        entry.selectedField === 'dependent_variables' ||
-        entry.selectedField === 'controlled_variables') && (
-        <VariablesInput
-          design={design}
-          field={entry.selectedField as 'independent_variables' | 'dependent_variables' | 'controlled_variables'}
-          selectedIndex={entry.selectedIndex}
-          isAddingNew={entry.isAddingNewItem}
-          proposedText={entry.proposedText}
-          onSelectIndex={handleSubIndexSelect}
-          onProposedChange={(text) => onUpdate({ proposedText: text })}
-        />
-      )}
-
-      {/* Suggestion type chips */}
-      {(entry.selectedField || entry.useNewField) && (
-        <div>
-          <p className="text-xs font-medium text-ink mb-1.5">
-            Type <span className="text-muted font-normal">(optional)</span>
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {SUGGESTION_TYPE_OPTIONS.map(({ value, label, activeClass }) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => onToggleType(value)}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                  entry.suggestionType === value
-                    ? activeClass
-                    : 'bg-white text-muted border-surface-2 hover:border-secondary'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+            {/* Custom field name input */}
+            {entry.useNewField && (
+              <input
+                type="text"
+                value={entry.newFieldName}
+                onChange={(e) => onUpdate({ newFieldName: e.target.value })}
+                placeholder="Field name…"
+                className="w-full input-sm mt-2"
+              />
+            )}
           </div>
-        </div>
-      )}
 
-      {/* Comment — always shown once a field is selected */}
-      {(entry.selectedField || entry.useNewField) && (
-        <div>
-          <label className="block text-xs font-medium text-ink mb-1">
-            Comment <span className="text-muted font-normal">(optional)</span>
-          </label>
-          <textarea
-            rows={2}
-            value={entry.comment}
-            onChange={(e) => onUpdate({ comment: e.target.value })}
-            placeholder="Explain your suggestion or ask a question…"
-            className="w-full input-sm resize-y"
-          />
-        </div>
+          {/* Field-type-specific input */}
+          {entry.selectedField === 'materials' && (
+            <MaterialsInput
+              design={design}
+              materialMap={materialMap}
+              removeMaterialIds={entry.removeMaterialIds}
+              addMaterialText={entry.addMaterialText}
+              onToggleRemove={(id) =>
+                onUpdate({
+                  removeMaterialIds: entry.removeMaterialIds.includes(id)
+                    ? entry.removeMaterialIds.filter((x) => x !== id)
+                    : [...entry.removeMaterialIds, id],
+                })
+              }
+              onAddTextChange={(text) => onUpdate({ addMaterialText: text })}
+            />
+          )}
+
+          {SIMPLE_TEXT_FIELDS.has(entry.selectedField) && (
+            <SimpleTextInput
+              currentValue={getSimpleFieldValue(design, entry.selectedField)}
+              proposedText={entry.proposedText}
+              onChange={(text) => onUpdate({ proposedText: text })}
+            />
+          )}
+
+          {entry.selectedField === 'steps' && (
+            <ListItemInput
+              label="step"
+              items={design.steps.map((s) => `Step ${s.step_number}: ${s.instruction}`)}
+              currentTexts={design.steps.map((s) => s.instruction)}
+              selectedIndex={entry.selectedIndex}
+              isAddingNew={entry.isAddingNewItem}
+              proposedText={entry.proposedText}
+              onSelectIndex={handleSubIndexSelect}
+              onProposedChange={(text) => onUpdate({ proposedText: text })}
+              addNewLabel="Propose a new step"
+              proposedPlaceholder="Write the new step instruction…"
+              replacePlaceholder="Proposed replacement for this step…"
+            />
+          )}
+
+          {entry.selectedField === 'research_questions' && (
+            <ListItemInput
+              label="question"
+              items={design.research_questions.map((q, i) => `Q${i + 1}: ${q.question}`)}
+              currentTexts={design.research_questions.map((q) => q.question)}
+              selectedIndex={entry.selectedIndex}
+              isAddingNew={entry.isAddingNewItem}
+              proposedText={entry.proposedText}
+              onSelectIndex={handleSubIndexSelect}
+              onProposedChange={(text) => onUpdate({ proposedText: text })}
+              addNewLabel="Propose a new research question"
+              proposedPlaceholder="Write the new research question…"
+              replacePlaceholder="Proposed replacement for this question…"
+            />
+          )}
+
+          {(entry.selectedField === 'independent_variables' ||
+            entry.selectedField === 'dependent_variables' ||
+            entry.selectedField === 'controlled_variables') && (
+            <VariablesInput
+              design={design}
+              field={entry.selectedField as 'independent_variables' | 'dependent_variables' | 'controlled_variables'}
+              selectedIndex={entry.selectedIndex}
+              isAddingNew={entry.isAddingNewItem}
+              proposedText={entry.proposedText}
+              onSelectIndex={handleSubIndexSelect}
+              onProposedChange={(text) => onUpdate({ proposedText: text })}
+            />
+          )}
+
+          {/* Suggestion type chips */}
+          {(entry.selectedField || entry.useNewField) && (
+            <div>
+              <p className="text-xs font-medium text-ink mb-1.5">
+                Type <span className="text-muted font-normal">(optional)</span>
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {SUGGESTION_TYPE_OPTIONS.map(({ value, label, activeClass }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => onToggleType(value)}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                      entry.suggestionType === value
+                        ? activeClass
+                        : 'bg-white text-muted border-surface-2 hover:border-secondary'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Comment — always shown once a field is selected */}
+          {(entry.selectedField || entry.useNewField) && (
+            <div>
+              <label className="block text-xs font-medium text-ink mb-1">
+                Comment <span className="text-muted font-normal">(optional)</span>
+              </label>
+              <textarea
+                rows={2}
+                value={entry.comment}
+                onChange={(e) => onUpdate({ comment: e.target.value })}
+                placeholder="Explain your suggestion or ask a question…"
+                className="w-full input-sm resize-y"
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   )

@@ -6,6 +6,34 @@ import type { Design } from '../types/design'
 import type { Material } from '../types/material'
 import type { Review, ReviewSummary, ReadinessSignal, SuggestionType } from '../types/review'
 
+// ─── Field name display helpers ───────────────────────────────────────────────
+
+const FIELD_DISPLAY_NAMES: Record<string, string> = {
+  title:                  'Title',
+  summary:                'Summary',
+  hypothesis:             'Hypothesis',
+  steps:                  'Procedure / Steps',
+  materials:              'Materials',
+  research_questions:     'Research Questions',
+  independent_variables:  'Independent Variables',
+  dependent_variables:    'Dependent Variables',
+  controlled_variables:   'Controlled Variables',
+  safety_considerations:  'Safety Considerations',
+  analysis_plan:          'Analysis Plan',
+  ethical_considerations: 'Ethical Considerations',
+}
+
+function formatFieldRef(fieldRef: string): string {
+  const match = fieldRef.match(/^([a-z_]+)(\[(.+)\])?$/)
+  if (!match) return fieldRef
+  const key = match[1]
+  const sub = match[3]
+  const displayName = FIELD_DISPLAY_NAMES[key] ?? key.replace(/_/g, ' ')
+  if (!sub) return displayName
+  if (sub === 'new') return `${displayName} (new)`
+  return `${displayName} #${sub}`
+}
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -60,9 +88,11 @@ export default function ReviewsSection({ designId, design, materialMap, isAuthor
   const [showForm, setShowForm] = useState(false)
   const [showReviews, setShowReviews] = useState(false)
   const [summaryError, setSummaryError] = useState('')
+  const [editingReview, setEditingReview] = useState<Review | undefined>(undefined)
 
   const canReview = !!user && !isAuthor && isPublished && (summary?.reviewable ?? false)
-  const alreadyReviewed = reviews.some((r) => r.reviewerId === user?.uid)
+  // userHasReviewed comes from the summary (server-authoritative); fall back to local check
+  const alreadyReviewed = summary?.userHasReviewed ?? reviews.some((r) => r.reviewerId === user?.uid)
 
   useEffect(() => {
     loadSummary()
@@ -79,16 +109,17 @@ export default function ReviewsSection({ designId, design, materialMap, isAuthor
     }
   }
 
-  async function loadReviews() {
-    if (loadingReviews) return
+  async function loadReviews(): Promise<Review[]> {
+    if (loadingReviews) return reviews
     setLoadingReviews(true)
     try {
       const res = await api.get<{ status: string; data: Review[] }>(
         `/api/designs/${designId}/reviews`,
       )
       setReviews(res.data)
+      return res.data
     } catch {
-      // non-critical
+      return reviews
     } finally {
       setLoadingReviews(false)
     }
@@ -100,21 +131,29 @@ export default function ReviewsSection({ designId, design, materialMap, isAuthor
     if (next && reviews.length === 0) loadReviews()
   }
 
+  async function handleEditReview() {
+    let current = reviews
+    if (reviews.length === 0) current = await loadReviews()
+    const mine = user ? current.find((r) => r.reviewerId === user.uid) : undefined
+    setEditingReview(mine)
+    setShowForm(true)
+  }
+
   function handleReviewSubmitted(review: Review) {
-    setReviews((prev) => [review, ...prev])
+    setReviews((prev) => {
+      const idx = prev.findIndex((r) => r.id === review.id)
+      if (idx !== -1) {
+        const next = [...prev]
+        next[idx] = review
+        return next
+      }
+      return [review, ...prev]
+    })
     setShowForm(false)
+    setEditingReview(undefined)
     setShowReviews(true)
-    setSummary((prev) =>
-      prev
-        ? {
-            ...prev,
-            reviewCount: review.endorsement ? prev.reviewCount : prev.reviewCount + 1,
-            endorsementCount: review.endorsement
-              ? prev.endorsementCount + 1
-              : prev.endorsementCount,
-          }
-        : prev,
-    )
+    // Reload summary from server since counts may have changed
+    loadSummary()
   }
 
   if (!isPublished) return null
@@ -169,10 +208,10 @@ export default function ReviewsSection({ designId, design, materialMap, isAuthor
           )}
           {canReview && alreadyReviewed && !showForm && (
             <button
-              onClick={() => setShowForm(true)}
+              onClick={handleEditReview}
               className="btn-secondary text-xs"
             >
-              Add another review
+              Edit your review
             </button>
           )}
           {!user && isPublished && !isAuthor && (
@@ -184,13 +223,16 @@ export default function ReviewsSection({ designId, design, materialMap, isAuthor
       {/* Review form */}
       {showForm && (
         <div className="mb-5 rounded-xl border border-surface-2 bg-surface p-5">
-          <h3 className="text-sm font-semibold text-ink mb-4">Write a review</h3>
+          <h3 className="text-sm font-semibold text-ink mb-4">
+            {editingReview ? 'Edit your review' : 'Write a review'}
+          </h3>
           <ReviewForm
             designId={designId}
             design={design}
             materialMap={materialMap}
+            existingReview={editingReview}
             onSubmitted={handleReviewSubmitted}
-            onCancel={() => setShowForm(false)}
+            onCancel={() => { setShowForm(false); setEditingReview(undefined) }}
           />
         </div>
       )}
@@ -273,10 +315,8 @@ function ReviewCard({ review }: { review: Review }) {
               <div className="flex flex-wrap items-center gap-1.5">
                 <span
                   className="text-xs font-medium px-2 py-0.5 rounded-full bg-dark/5 text-ink"
-                  style={{ fontFamily: 'var(--font-mono)' }}
                 >
-                  {s.fieldRef ?? s.newFieldName}
-                  {s.newFieldName && !s.fieldRef && ' (new)'}
+                  {s.fieldRef ? formatFieldRef(s.fieldRef) : `${s.newFieldName} (new)`}
                 </span>
                 {s.suggestionType && (
                   <span
