@@ -265,7 +265,8 @@ export async function getDesign(
       const draftSnap = await draftRef(req.params.id).get()
       if (draftSnap.exists) {
         const merged = mergeDraftWithMain(draftSnap.data() as Design, design)
-        void res.status(200).json({ status: 'ok', data: toResponse(merged) })
+        res.status(200).json({ status: 'ok', data: toResponse(merged) })
+        return
       }
     }
 
@@ -330,7 +331,8 @@ export async function updateDesign(
       }
       await ref.update(patch)
       const updated = await ref.get()
-      void res.status(200).json({ status: 'ok', data: toResponse(updated.data() as Design) })
+      res.status(200).json({ status: 'ok', data: toResponse(updated.data() as Design) })
+      return
     }
 
     // Published / locked designs: write edits to the draft sub-document so the
@@ -418,7 +420,8 @@ export async function publishDesign(
       if (changelog?.trim()) snapshot.changelog = changelog.trim()
       await versionsRef(req.params.id).doc(String(newPublishedVersion)).set(snapshot)
 
-      void res.status(200).json({ status: 'ok', data: toResponse(published) })
+      res.status(200).json({ status: 'ok', data: toResponse(published) })
+      return
     }
 
     if (design.status === 'published' || design.status === 'locked') {
@@ -437,9 +440,15 @@ export async function publishDesign(
       const validationError = validateCreate(draftData as unknown as CreateDesignBody)
       if (validationError) return next(badRequest(`Cannot publish: ${validationError}`))
 
+      // Explicit changelog in request body takes precedence; otherwise use the
+      // pending_changelog saved in the draft by the edit form.
+      const effectiveChangelog = changelog?.trim() || draftData.pending_changelog?.trim()
+
       const newPublishedVersion = design.published_version + 1
+      // Strip draft-only metadata before writing the main document
+      const { pending_changelog: _pc, ...draftDataClean } = draftData
       const updatedMain = {
-        ...draftData,
+        ...draftDataClean,
         id: design.id,
         status: design.status,
         is_public: design.is_public,
@@ -466,10 +475,11 @@ export async function publishDesign(
         published_by: req.user!.uid,
         data: toResponse(published),
       }
-      if (changelog?.trim()) snapshot.changelog = changelog.trim()
+      if (effectiveChangelog) snapshot.changelog = effectiveChangelog
       await versionsRef(req.params.id).doc(String(newPublishedVersion)).set(snapshot)
 
-      void res.status(200).json({ status: 'ok', data: toResponse(published) })
+      res.status(200).json({ status: 'ok', data: toResponse(published) })
+      return
     }
 
     return next(badRequest('Design cannot be published in its current state'))
