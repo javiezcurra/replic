@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import ReviewForm from './ReviewForm'
+import type { Design } from '../types/design'
+import type { Material } from '../types/material'
 import type { Review, ReviewSummary, ReadinessSignal, SuggestionType } from '../types/review'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
   designId: string
+  design: Design
+  materialMap: Record<string, Material>
   isAuthor: boolean
   isPublished: boolean
 }
@@ -48,7 +52,7 @@ function formatDate(iso: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ReviewsSection({ designId, isAuthor, isPublished }: Props) {
+export default function ReviewsSection({ designId, design, materialMap, isAuthor, isPublished }: Props) {
   const { user } = useAuth()
   const [summary, setSummary] = useState<ReviewSummary | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
@@ -183,6 +187,8 @@ export default function ReviewsSection({ designId, isAuthor, isPublished }: Prop
           <h3 className="text-sm font-semibold text-ink mb-4">Write a review</h3>
           <ReviewForm
             designId={designId}
+            design={design}
+            materialMap={materialMap}
             onSubmitted={handleReviewSubmitted}
             onCancel={() => setShowForm(false)}
           />

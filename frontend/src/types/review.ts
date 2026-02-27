@@ -53,11 +53,23 @@ export interface ReviewSummary {
 // ─── Form state types ─────────────────────────────────────────────────────────
 
 export interface SuggestionEntry {
-  localId: string           // React key only
-  fieldRef: string          // '' when useNewField is true
-  useNewField: boolean
-  newFieldName: string
-  proposedText: string
+  localId: string
+
+  // Top-level field selection
+  selectedField: string       // e.g. 'title', 'steps', 'materials', ''
+  useNewField: boolean        // true = user typed a custom field name
+  newFieldName: string        // only used when useNewField is true
+
+  // Sub-item selection (steps, research_questions, variables)
+  selectedIndex: number | null   // 0-based index into the list; null = nothing chosen
+  isAddingNewItem: boolean       // true = proposing a new item in a list field
+
+  // Content
+  proposedText: string    // free text for simple fields; pre-filled for sub-items
   comment: string
   suggestionType: SuggestionType | null
+
+  // Materials-specific
+  removeMaterialIds: string[]  // design.materials[i].material_id values checked for removal
+  addMaterialText: string      // free-text description of materials to add
 }
