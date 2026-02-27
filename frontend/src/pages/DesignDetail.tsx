@@ -359,7 +359,7 @@ export default function DesignDetail() {
                 <select
                   value={selectorKey}
                   onChange={(e) => handleVersionSelect(e.target.value)}
-                  className="text-xs border border-surface-2 rounded-lg px-2 py-1 bg-white text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className="input-sm text-xs py-1"
                   style={{ fontFamily: 'var(--font-mono)' }}
                 >
                   <option value="current">{currentOptionLabel}</option>
@@ -508,10 +508,10 @@ export default function DesignDetail() {
               </section>
             )}
 
-            {/* Procedure */}
+            {/* Methodology */}
             {viewedDesign.steps.length > 0 && (
               <section className="card p-6">
-                <SectionLabel>Procedure</SectionLabel>
+                <SectionLabel>Methodology</SectionLabel>
                 <ol className="space-y-5">
                   {viewedDesign.steps.map((step) => (
                     <li key={step.step_number} className="flex gap-4">

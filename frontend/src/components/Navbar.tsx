@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { fetchUserProfile } from '../lib/userProfileCache'
 
 const publicNavLinks = [
   { to: '/', label: 'Home', end: true },
@@ -15,7 +16,18 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [adminOpen, setAdminOpen]   = useState(false)
   const [userOpen,  setUserOpen]    = useState(false)
+  const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null)
   const { user, isAdmin, loading, signIn, signOut } = useAuth()
+
+  useEffect(() => {
+    if (user) {
+      fetchUserProfile(user.uid).then((p) => {
+        if (p) setProfileDisplayName(p.displayName)
+      })
+    } else {
+      setProfileDisplayName(null)
+    }
+  }, [user])
 
   const userNavLinks = user
     ? [
@@ -123,7 +135,7 @@ export default function Navbar() {
                     className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium
                                text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
                   >
-                    {user.displayName ?? user.email}
+                    {profileDisplayName ?? user.displayName ?? user.email}
                     <svg
                       className={`w-3.5 h-3.5 transition-transform ${userOpen ? 'rotate-180' : ''}`}
                       fill="none" stroke="currentColor" viewBox="0 0 24 24"

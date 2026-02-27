@@ -30,20 +30,12 @@ export default function UserProfileModal({ profile, onClose }: Props) {
       >
         {/* Header — avatar + name + admin badge */}
         <div className="flex items-center gap-4">
-          {profile.photoURL ? (
-            <img
-              src={profile.photoURL}
-              alt={profile.displayName}
-              className="w-14 h-14 rounded-full shrink-0 object-cover"
-            />
-          ) : (
-            <div
-              className="w-14 h-14 rounded-full flex items-center justify-center text-white text-xl font-bold shrink-0"
-              style={{ background: 'var(--color-dark)' }}
-            >
-              {initials}
-            </div>
-          )}
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center text-white text-xl font-bold shrink-0"
+            style={{ background: 'var(--color-dark)' }}
+          >
+            {initials}
+          </div>
           <div className="min-w-0">
             <div className="flex items-center flex-wrap gap-2">
               <p
