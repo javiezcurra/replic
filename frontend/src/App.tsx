@@ -7,6 +7,7 @@ import NotFound from './pages/NotFound'
 import Profile from './pages/Profile'
 import MyDesigns from './pages/MyDesigns'
 import MyLab from './pages/MyLab'
+import LabInventory from './pages/LabInventory'
 import CreateDesign from './pages/CreateDesign'
 import EditDesign from './pages/EditDesign'
 import DesignDetail from './pages/DesignDetail'
@@ -31,6 +32,7 @@ export default function App() {
         <Route element={<PrivateRoute />}>
           <Route path="profile" element={<Profile />} />
           <Route path="my-lab" element={<MyLab />} />
+          <Route path="lab-inventory" element={<LabInventory />} />
           <Route path="collaborators" element={<Collaborators />} />
           <Route path="designs/mine" element={<MyDesigns />} />
           <Route path="designs/new" element={<CreateDesign />} />

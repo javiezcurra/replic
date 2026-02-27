@@ -26,9 +26,31 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 
 interface Props {
   design: Design
+  compact?: boolean
 }
 
-export default function DesignCard({ design }: Props) {
+export default function DesignCard({ design, compact = false }: Props) {
+  if (compact) {
+    return (
+      <div className="relative group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-surface transition-colors">
+        <Link
+          to={`/designs/${design.id}`}
+          className="absolute inset-0 rounded-lg"
+          aria-label={design.title}
+        />
+        <span className="flex-1 text-sm font-medium text-ink truncate">{design.title}</span>
+        {design.has_draft_changes && design.status !== 'draft' && (
+          <span className="shrink-0 text-xs font-medium px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600">
+            edits
+          </span>
+        )}
+        <span className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[design.status]}`}>
+          {STATUS_LABELS[design.status]}
+        </span>
+      </div>
+    )
+  }
+
   return (
     // Stretched-link pattern: the Link covers the full card; interactive children
     // use relative + z-10 to sit above the overlay and receive their own clicks.
