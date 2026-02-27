@@ -511,42 +511,9 @@ function CoauthorsPicker({
   onAdd: (c: CoauthorEntry) => void
   onRemove: (uid: string) => void
 }) {
-  const [query, setQuery] = useState('')
-  const [collaborators, setCollaborators] = useState<CollaboratorEntry[]>([])
-  const [loaded, setLoaded] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [open, setOpen] = useState(false)
   const [showDrawer, setShowDrawer] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
 
   const selectedUids = useMemo(() => new Set(selected.map((c) => c.uid)), [selected])
-
-  function loadCollaborators() {
-    if (loaded || loading) return
-    setLoading(true)
-    api
-      .get<{ status: string; data: CollaboratorEntry[] }>('/api/users/me/collaborators')
-      .then(({ data }) => setCollaborators([...data].sort((a, b) => a.displayName.localeCompare(b.displayName))))
-      .catch(() => {})
-      .finally(() => { setLoaded(true); setLoading(false) })
-  }
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
-  const filtered = useMemo(() => {
-    const q = query.toLowerCase().trim()
-    const available = collaborators.filter((c) => !selectedUids.has(c.uid))
-    if (!q) return available.slice(0, 8)
-    return available.filter((c) => c.displayName.toLowerCase().includes(q)).slice(0, 8)
-  }, [collaborators, query, selectedUids])
 
   return (
     <div>
@@ -572,63 +539,18 @@ function CoauthorsPicker({
         </div>
       )}
 
-      <div className="flex gap-2 items-start">
-        {/* Type-ahead input */}
-        <div className="relative flex-1" ref={containerRef}>
-          <input
-            type="text"
-            value={query}
-            placeholder="Search your collaborators…"
-            className="w-full input-sm"
-            onFocus={() => { loadCollaborators(); setOpen(true) }}
-            onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
-          />
-          {open && (
-            <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-white border border-gray-200
-                            rounded-xl shadow-lg overflow-hidden max-h-56 overflow-y-auto">
-              {loading && <p className="px-3 py-2 text-xs text-gray-400">Loading…</p>}
-              {!loading && filtered.length === 0 && (
-                <p className="px-3 py-2 text-xs text-gray-400">
-                  {collaborators.length === 0
-                    ? 'No collaborators yet — connect with researchers first.'
-                    : 'No matching collaborators.'}
-                </p>
-              )}
-              {filtered.map((c) => (
-                <button
-                  key={c.uid}
-                  type="button"
-                  onClick={() => {
-                    onAdd({ uid: c.uid, displayName: c.displayName })
-                    setQuery('')
-                    setOpen(false)
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-800"
-                >
-                  {c.displayName}
-                  {c.affiliation && (
-                    <span className="ml-2 text-xs text-gray-400">{c.affiliation}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Drawer trigger */}
-        <button
-          type="button"
-          onClick={() => setShowDrawer(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 border-dashed
-                     border-gray-300 text-sm text-gray-600 hover:border-brand-400
-                     hover:text-brand-600 transition-colors shrink-0"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Browse
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => setShowDrawer(true)}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 border-dashed
+                   border-gray-300 text-sm text-gray-600 hover:border-brand-400
+                   hover:text-brand-600 transition-colors"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+        + Add Co-Authors
+      </button>
 
       {showDrawer && (
         <CoauthorsDrawer

@@ -133,7 +133,8 @@ export interface Design {
   version: number              // internal edit counter, increments on every PATCH
   published_version: number    // user-facing version number, increments on each publish (0 = never published)
   has_draft_changes: boolean   // true when a published design has unsaved edits in its draft sub-document
-  author_ids: string[]
+  owner_uid: string            // immutable — the user who created the design
+  author_ids: string[]         // owner_uid + coauthor_uids (drives all permission checks)
   review_status: ReviewStatus
   review_count: number
   execution_count: number

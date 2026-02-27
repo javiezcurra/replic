@@ -72,6 +72,7 @@ export interface Design {
   published_version: number    // user-facing version number; 0 = never published
   has_draft_changes: boolean   // true when a published design has unsaved edits
   pending_changelog?: string   // changelog text saved in draft, auto-used on next publish
+  owner_uid?: string
   author_ids: string[]
   execution_count: number
   derived_design_count: number
