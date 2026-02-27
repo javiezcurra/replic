@@ -93,6 +93,9 @@ export async function listPipeline(
           status: d.status,
           discipline_tags: d.discipline_tags,
           difficulty_level: d.difficulty_level,
+          execution_count: d.execution_count ?? 0,
+          derived_design_count: d.derived_design_count ?? 0,
+          author_ids: d.author_ids ?? [],
         }
       }),
     )

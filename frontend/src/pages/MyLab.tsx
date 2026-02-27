@@ -5,6 +5,7 @@ import type { Design } from '../types/design'
 import type { Material } from '../types/material'
 import type { CollaboratorEntry, UserPublicProfile } from '../types/user'
 import DesignCard from '../components/DesignCard'
+import UserDisplayName from '../components/UserDisplayName'
 import UserProfileModal from '../components/UserProfileModal'
 import { fetchUserProfile } from '../lib/userProfileCache'
 
@@ -17,6 +18,9 @@ interface PipelineEntry {
   status: string
   discipline_tags: string[]
   difficulty_level: string
+  execution_count: number
+  derived_design_count: number
+  author_ids: string[]
 }
 
 interface WatchlistEntry extends PipelineEntry {
@@ -223,28 +227,44 @@ function CompactEntryCard({ entry, watchlistSource }: {
         aria-label={entry.title}
       />
 
-      {/* Row 1: title + status chip */}
+      {/* Row 1: title + optional "reviewed" badge + status chip */}
       <div className="flex items-start justify-between gap-3 mb-2">
         <h3 className="font-semibold text-ink text-sm leading-snug">{entry.title}</h3>
-        <span
-          className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${ENTRY_STATUS_COLORS[entry.status] ?? 'bg-gray-100 text-gray-600'}`}
-        >
-          {ENTRY_STATUS_LABELS[entry.status] ?? entry.status}
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {watchlistSource === 'review' && (
+            <span
+              className="text-xs font-medium px-1.5 py-0.5 rounded-full"
+              style={{ background: 'var(--color-accent)', color: 'var(--color-text)' }}
+            >
+              reviewed
+            </span>
+          )}
+          <span
+            className={`text-xs font-medium px-2 py-0.5 rounded-full ${ENTRY_STATUS_COLORS[entry.status] ?? 'bg-gray-100 text-gray-600'}`}
+          >
+            {ENTRY_STATUS_LABELS[entry.status] ?? entry.status}
+          </span>
+        </div>
       </div>
 
-      {/* Row 2: date added + optional "reviewed" badge */}
-      <div className="flex items-center gap-2 text-xs text-muted mb-2.5">
-        <span style={{ fontFamily: 'var(--font-mono)' }}>
-          {new Date(entry.addedAt).toLocaleDateString()}
-        </span>
-        {watchlistSource === 'review' && (
-          <span
-            className="px-1.5 py-0.5 rounded-full font-medium"
-            style={{ background: 'var(--color-accent)', color: 'var(--color-text)' }}
-          >
-            reviewed
-          </span>
+      {/* Row 2: runs · forks · authors */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted mb-2.5">
+        <span style={{ fontFamily: 'var(--font-mono)' }}>{entry.execution_count} runs</span>
+        <span className="text-gray-300">·</span>
+        <span style={{ fontFamily: 'var(--font-mono)' }}>{entry.derived_design_count} forks</span>
+        {entry.author_ids.length > 0 && (
+          <>
+            <span className="text-gray-300">·</span>
+            <span className="flex flex-wrap items-center gap-x-1">
+              <span>Authors:</span>
+              {entry.author_ids.map((uid, i) => (
+                <span key={uid} className="flex items-center gap-0.5">
+                  <UserDisplayName uid={uid} className="text-xs" />
+                  {i < entry.author_ids.length - 1 && <span>,</span>}
+                </span>
+              ))}
+            </span>
+          </>
         )}
       </div>
 
