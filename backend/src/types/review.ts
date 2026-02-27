@@ -93,4 +93,5 @@ export interface ReviewSummary {
   versionNumber: number
   isLocked: boolean
   reviewable: boolean
+  userHasReviewed?: boolean
 }

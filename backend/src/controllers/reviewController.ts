@@ -178,24 +178,56 @@ export async function submitReview(
       }
     }
 
-    const now = FieldValue.serverTimestamp()
-    const reviewId = randomUUID()
     const versionNumber = design.published_version
+    const now = FieldValue.serverTimestamp()
+
+    // One review per user per version — find any existing review from this caller
+    const existingSnap = await reviewsRef(id)
+      .where('reviewerId', '==', callerId)
+      .where('versionNumber', '==', versionNumber)
+      .limit(1)
+      .get()
+
+    const isUpdate = !existingSnap.empty
+    const reviewId = isUpdate ? existingSnap.docs[0].id : randomUUID()
+    const reviewDocRef = reviewsRef(id).doc(reviewId)
     const batch = adminDb.batch()
 
-    const reviewDocRef = reviewsRef(id).doc(reviewId)
-    batch.set(reviewDocRef, {
-      id: reviewId,
-      designId: id,
-      versionNumber,
-      reviewerId: callerId,
-      generalComment,
-      readinessSignal,
-      endorsement,
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-    })
+    if (isUpdate) {
+      // Delete old suggestions so they are replaced by the new set
+      const oldSuggsSnap = await reviewDocRef.collection('suggestions').get()
+      for (const doc of oldSuggsSnap.docs) batch.delete(doc.ref)
+
+      batch.update(reviewDocRef, {
+        generalComment,
+        readinessSignal,
+        endorsement,
+        status: 'active',
+        updatedAt: now,
+      })
+      // review_count on the design does not change — total number of reviews is unchanged
+    } else {
+      batch.set(reviewDocRef, {
+        id: reviewId,
+        designId: id,
+        versionNumber,
+        reviewerId: callerId,
+        generalComment,
+        readinessSignal,
+        endorsement,
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      })
+
+      // Increment review count atomically; flip review_status on first review
+      batch.update(adminDb.collection(DESIGNS).doc(id), {
+        review_count: FieldValue.increment(1),
+        review_status:
+          design.review_status === 'unreviewed' ? 'under_review' : design.review_status,
+        updated_at: now,
+      })
+    }
 
     for (const s of suggestions) {
       const suggestionId = randomUUID()
@@ -216,14 +248,6 @@ export async function submitReview(
       })
     }
 
-    // Increment review count atomically; flip review_status on first review
-    batch.update(adminDb.collection(DESIGNS).doc(id), {
-      review_count: FieldValue.increment(1),
-      review_status:
-        design.review_status === 'unreviewed' ? 'under_review' : design.review_status,
-      updated_at: now,
-    })
-
     await batch.commit()
 
     // Read back the committed documents
@@ -236,7 +260,7 @@ export async function submitReview(
     const savedSuggs = suggsSnap.docs.map((d) => d.data() as FieldSuggestion)
     savedSuggs.sort((a, b) => a.createdAt.toMillis() - b.createdAt.toMillis())
 
-    res.status(201).json({ status: 'ok', data: toReviewResponse(savedReview, savedSuggs) })
+    res.status(isUpdate ? 200 : 201).json({ status: 'ok', data: toReviewResponse(savedReview, savedSuggs) })
   } catch (err) {
     next(err)
   }
@@ -461,6 +485,17 @@ export async function getReviewSummary(
     const isLocked = design.status === 'locked' || design.execution_count > 0
     const reviewable = design.status === 'published' && !isLocked
 
+    // Include whether the authenticated caller has already reviewed this version
+    let userHasReviewed: boolean | undefined
+    if (req.user) {
+      const userReviewSnap = await reviewsRef(id)
+        .where('reviewerId', '==', req.user.uid)
+        .where('versionNumber', '==', design.published_version)
+        .limit(1)
+        .get()
+      userHasReviewed = !userReviewSnap.empty
+    }
+
     const summary: ReviewSummary = {
       endorsementCount,
       reviewCount,
@@ -468,6 +503,7 @@ export async function getReviewSummary(
       versionNumber: design.published_version,
       isLocked,
       reviewable,
+      userHasReviewed,
     }
 
     res.status(200).json({ status: 'ok', data: summary })
