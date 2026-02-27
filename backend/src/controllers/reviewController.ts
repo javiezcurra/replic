@@ -511,3 +511,162 @@ export async function getReviewSummary(
     next(err)
   }
 }
+
+// ─── Suggestion management (owner only) ──────────────────────────────────────
+
+function suggestionRef(designId: string, reviewId: string, suggestionId: string) {
+  return reviewsRef(designId).doc(reviewId).collection('suggestions').doc(suggestionId)
+}
+
+async function requireOwnerAndOpenSuggestion(
+  designId: string,
+  reviewId: string,
+  suggestionId: string,
+  callerId: string,
+): Promise<{ design: Design; suggestion: FieldSuggestion }> {
+  const designSnap = await adminDb.collection(DESIGNS).doc(designId).get()
+  if (!designSnap.exists) throw notFoundError('Design not found')
+  const design = designSnap.data() as Design
+
+  if (!design.author_ids.includes(callerId)) {
+    throw forbidden('Only the design owner can manage suggestions.')
+  }
+
+  const suggSnap = await suggestionRef(designId, reviewId, suggestionId).get()
+  if (!suggSnap.exists) throw notFoundError('Suggestion not found')
+  const suggestion = suggSnap.data() as FieldSuggestion
+
+  return { design, suggestion }
+}
+
+// ─── POST /api/designs/:id/reviews/:reviewId/suggestions/:suggestionId/accept ─
+
+export async function acceptSuggestion(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { id: designId, reviewId, suggestionId } = req.params
+    const callerId = req.user!.uid
+
+    let design: Design, suggestion: FieldSuggestion
+    try {
+      ;({ design, suggestion } = await requireOwnerAndOpenSuggestion(designId, reviewId, suggestionId, callerId))
+    } catch (err) {
+      return next(err as AppError)
+    }
+
+    if (suggestion.status !== 'open') {
+      return next(badRequest('Only open suggestions can be accepted.'))
+    }
+
+    const now = FieldValue.serverTimestamp()
+    const batch = adminDb.batch()
+    const suggRef = suggestionRef(designId, reviewId, suggestionId)
+    batch.update(suggRef, { status: 'accepted', updatedAt: now })
+
+    // Create a draft if one does not yet exist so the owner can incorporate this suggestion.
+    let draftCreated = false
+    if (!design.has_draft_changes) {
+      const designRef = adminDb.collection(DESIGNS).doc(designId)
+      const draftDoc = designRef.collection('draft').doc('current')
+      batch.set(draftDoc, { ...design, updated_at: now })
+      batch.update(designRef, {
+        has_draft_changes: true,
+        version: design.version + 1,
+        updated_at: now,
+      })
+      draftCreated = true
+    }
+
+    await batch.commit()
+
+    const updatedSnap = await suggRef.get()
+    const updated = updatedSnap.data() as FieldSuggestion
+
+    res.json({ status: 'ok', data: { suggestion: toSuggestionResponse(updated), draftCreated } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ─── POST /api/designs/:id/reviews/:reviewId/suggestions/:suggestionId/close ──
+
+export async function closeSuggestion(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { id: designId, reviewId, suggestionId } = req.params
+    const callerId = req.user!.uid
+
+    let suggestion: FieldSuggestion
+    try {
+      ;({ suggestion } = await requireOwnerAndOpenSuggestion(designId, reviewId, suggestionId, callerId))
+    } catch (err) {
+      return next(err as AppError)
+    }
+
+    if (suggestion.status !== 'open') {
+      return next(badRequest('Only open suggestions can be closed.'))
+    }
+
+    const now = FieldValue.serverTimestamp()
+    const suggRef = suggestionRef(designId, reviewId, suggestionId)
+    await suggRef.update({ status: 'closed', updatedAt: now })
+
+    const updatedSnap = await suggRef.get()
+    const updated = updatedSnap.data() as FieldSuggestion
+
+    res.json({ status: 'ok', data: toSuggestionResponse(updated) })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ─── POST /api/designs/:id/reviews/:reviewId/suggestions/:suggestionId/reply ──
+
+export async function replySuggestion(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { id: designId, reviewId, suggestionId } = req.params
+    const callerId = req.user!.uid
+
+    const designSnap = await adminDb.collection(DESIGNS).doc(designId).get()
+    if (!designSnap.exists) return next(notFoundError('Design not found'))
+    const design = designSnap.data() as Design
+
+    if (!design.author_ids.includes(callerId)) {
+      return next(forbidden('Only the design owner can reply to suggestions.'))
+    }
+
+    const reply = (req.body?.reply ?? '').trim()
+    if (!reply) return next(badRequest('Reply text is required.'))
+
+    const suggSnap = await suggestionRef(designId, reviewId, suggestionId).get()
+    if (!suggSnap.exists) return next(notFoundError('Suggestion not found'))
+    const suggestion = suggSnap.data() as FieldSuggestion
+
+    if (suggestion.ownerReply !== null) {
+      const err: AppError = new Error('A reply has already been sent for this suggestion.')
+      err.statusCode = 409
+      return next(err)
+    }
+
+    const now = FieldValue.serverTimestamp()
+    const suggRef = suggestionRef(designId, reviewId, suggestionId)
+    await suggRef.update({ ownerReply: reply, updatedAt: now })
+
+    const updatedSnap = await suggRef.get()
+    const updated = updatedSnap.data() as FieldSuggestion
+
+    res.json({ status: 'ok', data: toSuggestionResponse(updated) })
+  } catch (err) {
+    next(err)
+  }
+}

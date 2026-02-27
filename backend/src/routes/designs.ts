@@ -19,6 +19,9 @@ import {
   endorseDesign,
   listEndorsements,
   getReviewSummary,
+  acceptSuggestion,
+  closeSuggestion,
+  replySuggestion,
 } from '../controllers/reviewController'
 
 const router = Router()
@@ -44,5 +47,8 @@ router.post('/:id/fork', forkDesign)
 router.delete('/:id', deleteDesign)
 router.post('/:id/reviews', submitReview)
 router.post('/:id/endorsements', endorseDesign)
+router.post('/:id/reviews/:reviewId/suggestions/:suggestionId/accept', acceptSuggestion)
+router.post('/:id/reviews/:reviewId/suggestions/:suggestionId/close', closeSuggestion)
+router.post('/:id/reviews/:reviewId/suggestions/:suggestionId/reply', replySuggestion)
 
 export default router
