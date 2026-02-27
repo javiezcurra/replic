@@ -6,6 +6,7 @@ import type { Design, DesignMaterial, ForkType, DesignVersionSummary, DesignVers
 import type { Material } from '../types/material'
 import MaterialCard from '../components/MaterialCard'
 import MaterialDetailModal from '../components/MaterialDetailModal'
+import ReviewsSection from '../components/ReviewsSection'
 
 const FORK_TYPES: { value: ForkType; label: string; description: string }[] = [
   { value: 'replication', label: 'Replication', description: 'Reproduce the same study to verify results' },
@@ -444,8 +445,9 @@ export default function DesignDetail() {
         </div>
       )}
 
-      {/* ── Two-column layout ── */}
+      {/* ── Two-column layout + reviews ── */}
       {!snapshotLoading && (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
           {/* ────────── Main content (left, 2/3) ────────── */}
@@ -696,9 +698,35 @@ export default function DesignDetail() {
                 <button className="w-full btn-secondary text-sm justify-center" disabled>
                   Add to My Lab
                 </button>
-                <button className="w-full btn-secondary text-sm justify-center" disabled>
-                  Review Experiment
-                </button>
+                {design.status === 'published' && !isAuthor && user && (
+                  <button
+                    onClick={() =>
+                      document
+                        .getElementById('reviews-section')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }
+                    className="w-full btn-secondary text-sm justify-center"
+                  >
+                    Review Experiment
+                  </button>
+                )}
+                {design.status === 'published' && isAuthor && (
+                  <button
+                    onClick={() =>
+                      document
+                        .getElementById('reviews-section')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }
+                    className="w-full btn-secondary text-sm justify-center"
+                  >
+                    View Reviews
+                  </button>
+                )}
+                {design.status !== 'published' && (
+                  <button className="w-full btn-secondary text-sm justify-center" disabled>
+                    Review Experiment
+                  </button>
+                )}
                 {(canFork || design.status === 'published') && (
                   <button
                     onClick={canFork ? () => setShowForkModal(true) : undefined}
@@ -739,9 +767,6 @@ export default function DesignDetail() {
                           : 'Publish'}
                       </button>
                     )}
-                    <button className="w-full btn-secondary text-sm justify-center" disabled>
-                      View Reviews
-                    </button>
                   </div>
                 </>
               )}
@@ -812,6 +837,18 @@ export default function DesignDetail() {
             )}
           </div>
         </div>
+
+        {/* ── Reviews section (full-width, below columns) ── */}
+        {design.status === 'published' && (
+          <div id="reviews-section" className="mt-2">
+            <ReviewsSection
+              designId={design.id}
+              isAuthor={isAuthor}
+              isPublished={design.status === 'published'}
+            />
+          </div>
+        )}
+        </>
       )}
 
       {/* ── Edit warning modal ── */}
