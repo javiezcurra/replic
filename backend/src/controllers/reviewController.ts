@@ -4,6 +4,7 @@ import { FieldValue, Query, DocumentData } from 'firebase-admin/firestore'
 import { adminDb } from '../lib/firebase'
 import { AppError } from '../middleware/errorHandler'
 import { Design } from '../types/design'
+import { upsertWatchlistEntry } from './watchlistController'
 import {
   Review,
   FieldSuggestion,
@@ -249,6 +250,9 @@ export async function submitReview(
     }
 
     await batch.commit()
+
+    // Auto-add the reviewed design to the reviewer's watchlist (fire-and-forget)
+    upsertWatchlistEntry(callerId, id, 'review').catch(() => {})
 
     // Read back the committed documents
     const [reviewSnap, suggsSnap] = await Promise.all([

@@ -10,6 +10,18 @@ import {
   removeCollaborator,
   getRelationship,
 } from '../controllers/collaboratorController'
+import {
+  addToPipeline,
+  removeFromPipeline,
+  listPipeline,
+  isPipelined,
+} from '../controllers/pipelineController'
+import {
+  addToWatchlist,
+  removeFromWatchlist,
+  listWatchlist,
+  isWatchlisted,
+} from '../controllers/watchlistController'
 
 const router = Router()
 
@@ -27,6 +39,18 @@ router.post('/me/collaboration-requests/:requestId/accept', acceptCollaborationR
 router.post('/me/collaboration-requests/:requestId/decline', declineCollaborationRequest)
 router.get('/me/collaborators', listCollaborators)
 router.delete('/me/collaborators/:uid', removeCollaborator)
+
+// Pipeline
+router.get('/me/pipeline', listPipeline)
+router.get('/me/pipeline/:designId', isPipelined)
+router.post('/me/pipeline/:designId', addToPipeline)
+router.delete('/me/pipeline/:designId', removeFromPipeline)
+
+// Watchlist
+router.get('/me/watchlist', listWatchlist)
+router.get('/me/watchlist/:designId', isWatchlisted)
+router.post('/me/watchlist/:designId', addToWatchlist)
+router.delete('/me/watchlist/:designId', removeFromWatchlist)
 
 // User search — must be before /:id
 router.get('/search', searchUsers)
