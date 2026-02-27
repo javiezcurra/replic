@@ -17,7 +17,7 @@ export default function Navbar() {
   const [adminOpen, setAdminOpen]   = useState(false)
   const [userOpen,  setUserOpen]    = useState(false)
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null)
-  const { user, isAdmin, loading, signIn, signOut } = useAuth()
+  const { user, isAdmin, loading, signOut } = useAuth()
 
   useEffect(() => {
     if (user) {
@@ -166,8 +166,8 @@ export default function Navbar() {
               </>
             ) : (
               <>
-                <button onClick={signIn} className="btn-secondary text-sm">Sign in</button>
-                <button onClick={signIn} className="btn-primary text-sm">Get started</button>
+                <Link to="/login" className="btn-secondary text-sm">Sign in</Link>
+                <Link to="/signup" className="btn-primary text-sm">Get started</Link>
               </>
             )}
           </div>
@@ -234,8 +234,8 @@ export default function Navbar() {
                 </>
               ) : (
                 <>
-                  <button onClick={signIn} className="btn-secondary w-full justify-center">Sign in</button>
-                  <button onClick={signIn} className="btn-primary w-full justify-center">Get started</button>
+                  <Link to="/login" onClick={() => setMobileOpen(false)} className="btn-secondary w-full justify-center">Sign in</Link>
+                  <Link to="/signup" onClick={() => setMobileOpen(false)} className="btn-primary w-full justify-center">Get started</Link>
                 </>
               )}
             </div>

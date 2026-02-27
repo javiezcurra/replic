@@ -1,8 +1,9 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function PrivateRoute() {
   const { user, loading } = useAuth()
+  const location = useLocation()
 
   if (loading) {
     return (
@@ -13,7 +14,7 @@ export default function PrivateRoute() {
   }
 
   if (!user) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />
   }
 
   return <Outlet />

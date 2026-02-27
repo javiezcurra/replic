@@ -2,9 +2,13 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import {
   GoogleAuthProvider,
   User,
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
+  updateProfile,
 } from 'firebase/auth'
 import { auth } from '../lib/firebase'
 import { api } from '../lib/api'
@@ -14,6 +18,9 @@ interface AuthContextValue {
   isAdmin: boolean
   loading: boolean
   signIn: () => Promise<void>
+  signInWithEmail: (email: string, password: string) => Promise<void>
+  signUpWithEmail: (email: string, password: string, displayName: string) => Promise<void>
+  resetPassword: (email: string) => Promise<void>
   signOut: () => Promise<void>
   /** Re-fetches the user profile and updates isAdmin. Call after toggling admin status. */
   refreshIsAdmin: () => Promise<void>
@@ -57,6 +64,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function signInWithEmail(email: string, password: string) {
+    await signInWithEmailAndPassword(auth, email, password)
+    try {
+      await api.post('/api/users/me')
+    } catch {
+      // Non-fatal
+    }
+  }
+
+  async function signUpWithEmail(email: string, password: string, displayName: string) {
+    const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password)
+    await updateProfile(newUser, { displayName })
+    // Force token refresh so displayName is included in JWT claims
+    await newUser.getIdToken(true)
+    try {
+      await api.post('/api/users/me')
+    } catch {
+      // Non-fatal
+    }
+  }
+
+  async function resetPassword(email: string) {
+    await sendPasswordResetEmail(auth, email)
+  }
+
   async function refreshIsAdmin() {
     try {
       const res = await api.get<{ status: string; data: { is_admin: boolean } }>('/api/users/me')
@@ -71,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, loading, signIn, signOut, refreshIsAdmin }}>
+    <AuthContext.Provider value={{ user, isAdmin, loading, signIn, signInWithEmail, signUpWithEmail, resetPassword, signOut, refreshIsAdmin }}>
       {children}
     </AuthContext.Provider>
   )
