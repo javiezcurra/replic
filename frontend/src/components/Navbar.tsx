@@ -31,8 +31,9 @@ export default function Navbar() {
 
   const userNavLinks = user
     ? [
-        { to: '/my-lab',       label: 'My Lab',      end: false },
-        { to: '/designs/mine', label: 'My Designs',  end: false },
+        { to: '/my-lab',        label: 'My Lab',        end: false },
+        { to: '/collaborators', label: 'Collaborators',  end: false },
+        { to: '/designs/mine',  label: 'My Designs',    end: false },
       ]
     : []
 
