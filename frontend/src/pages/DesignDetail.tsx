@@ -56,6 +56,9 @@ export default function DesignDetail() {
   const [selectedSnapshot, setSelectedSnapshot] = useState<DesignVersionSnapshot | null>(null)
   const [snapshotLoading, setSnapshotLoading] = useState(false)
 
+  // Edit warning modal (shown before navigating to edit for published designs with no draft yet)
+  const [showEditWarning, setShowEditWarning] = useState(false)
+
   async function loadMaterials(materials: DesignMaterial[]) {
     if (!materials.length) return
     const results = await Promise.allSettled(
@@ -67,8 +70,17 @@ export default function DesignDetail() {
     results.forEach((r, i) => {
       if (r.status === 'fulfilled') map[materials[i].material_id] = r.value.data
     })
-    setMaterialMap(map)
+    // Merge into existing map so materials from other viewed versions remain accessible
+    setMaterialMap((prev) => ({ ...prev, ...map }))
   }
+
+  // When the selected snapshot changes, fetch any materials it references that we
+  // haven't loaded yet (i.e. materials removed from the current version).
+  useEffect(() => {
+    if (selectedSnapshot?.data?.materials?.length) {
+      loadMaterials(selectedSnapshot.data.materials)
+    }
+  }, [selectedSnapshot])
 
   async function loadRefTitles(ids: string[]) {
     if (!ids.length) return
@@ -152,6 +164,16 @@ export default function DesignDetail() {
       setError(err instanceof Error ? err.message : 'Failed to publish')
     } finally {
       setPublishing(false)
+    }
+  }
+
+  function handleEditClick() {
+    // For published designs that have no draft yet, show a warning first explaining
+    // that edits create a private draft and the published version stays live.
+    if (design && design.status === 'published' && !design.has_draft_changes) {
+      setShowEditWarning(true)
+    } else {
+      navigate(`/designs/${id}/edit`)
     }
   }
 
@@ -258,6 +280,27 @@ export default function DesignDetail() {
     isAuthor &&
     design.has_draft_changes &&
     selectedSnapshot.version_number === design.published_version
+
+  // Determine which changelog entry to show in the sidebar (null = hide the card).
+  const changelogToShow: { text: string; date?: string; label?: string } | null = (() => {
+    if (selectedSnapshot !== null) {
+      return selectedSnapshot.changelog
+        ? { text: selectedSnapshot.changelog, date: selectedSnapshot.published_at }
+        : null
+    }
+    // Viewing "current" as author with a pending draft changelog
+    if (isAuthor && design.has_draft_changes && design.pending_changelog) {
+      return { text: design.pending_changelog, label: 'Draft changelog (not yet published)' }
+    }
+    // Viewing the latest published version — show its changelog if one was recorded
+    if (design.published_version > 0) {
+      const currentVersion = versions.find((v) => v.version_number === design.published_version)
+      if (currentVersion?.changelog) {
+        return { text: currentVersion.changelog, date: currentVersion.published_at }
+      }
+    }
+    return null
+  })()
 
   return (
     <div className="max-w-6xl mx-auto py-8 px-4">
@@ -556,6 +599,28 @@ export default function DesignDetail() {
           {/* ────────── Sidebar (right, 1/3) ────────── */}
           <div className="space-y-5 lg:sticky lg:top-6">
 
+            {/* Changelog */}
+            {changelogToShow && (
+              <div className="card p-5">
+                <SectionLabel>Changelog</SectionLabel>
+                {changelogToShow.label && (
+                  <p className="text-xs font-medium text-amber-700 mb-2">{changelogToShow.label}</p>
+                )}
+                {changelogToShow.date && (
+                  <p className="text-xs text-muted mb-2">
+                    {new Date(changelogToShow.date).toLocaleDateString(undefined, {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </p>
+                )}
+                <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
+                  {changelogToShow.text}
+                </p>
+              </div>
+            )}
+
             {/* About */}
             <div className="card p-5">
               <SectionLabel>About</SectionLabel>
@@ -654,12 +719,12 @@ export default function DesignDetail() {
                   </p>
                   <div className="space-y-2">
                     {canEdit && (
-                      <Link
-                        to={`/designs/${id}/edit`}
+                      <button
+                        onClick={handleEditClick}
                         className="block w-full btn-secondary text-sm text-center justify-center"
                       >
                         Edit
-                      </Link>
+                      </button>
                     )}
                     {canPublish && (
                       <button
@@ -745,6 +810,51 @@ export default function DesignDetail() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit warning modal ── */}
+      {showEditWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">📋</span>
+              <div>
+                <h2
+                  className="text-lg font-semibold"
+                  style={{ fontFamily: 'var(--font-body)', color: 'var(--color-text)' }}
+                >
+                  You're editing a published design
+                </h2>
+                <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                  Your changes will be saved as a private draft.{' '}
+                  {design.published_version > 0 ? `v${design.published_version}` : 'The current version'}{' '}
+                  will remain publicly visible until you publish the new version.
+                </p>
+                <p className="text-sm mt-2" style={{ color: 'var(--color-text-muted)' }}>
+                  You can save your edits as many times as you like — nothing goes public until you
+                  click <strong>Publish draft</strong>.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                className="btn-primary text-sm flex-1"
+                onClick={() => {
+                  setShowEditWarning(false)
+                  navigate(`/designs/${id}/edit`)
+                }}
+              >
+                Got it, start editing
+              </button>
+              <button
+                className="btn-secondary text-sm flex-1"
+                onClick={() => setShowEditWarning(false)}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

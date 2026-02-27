@@ -46,7 +46,8 @@ export default function EditDesign() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [showVersionWarning, setShowVersionWarning] = useState(false)
+  // Changelog note — only shown / submitted when editing a design that has been published at least once
+  const [changelog, setChangelog] = useState('')
 
   async function loadMaterialDetails(designMaterials: DesignMaterial[]) {
     if (!designMaterials.length) return
@@ -70,12 +71,7 @@ export default function EditDesign() {
         setDesign(d)
         setValues(designToFormValues(d))
         loadMaterialDetails(d.materials)
-        // Show the warning when the design is published and has no pending draft yet.
-        // If has_draft_changes is already true, the author has already seen the warning
-        // in a previous session and created a draft.
-        if (d.status === 'published' && !d.has_draft_changes) {
-          setShowVersionWarning(true)
-        }
+        setChangelog(d.pending_changelog ?? '')
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
@@ -86,7 +82,11 @@ export default function EditDesign() {
     setSubmitting(true)
     setError('')
     try {
-      await api.patch(`/api/designs/${id}`, formValuesToBody(values))
+      const body: Record<string, unknown> = { ...formValuesToBody(values) }
+      if (design && design.published_version > 0) {
+        body.pending_changelog = changelog
+      }
+      await api.patch(`/api/designs/${id}`, body)
       navigate(`/designs/${id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
@@ -104,68 +104,68 @@ export default function EditDesign() {
   }
 
   const isLocked = design ? design.execution_count >= 1 : false
-  const publishedVersionLabel = design && design.published_version > 0
-    ? `v${design.published_version}`
-    : 'the current version'
+  const isVersioned = design ? design.published_version > 0 : false
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-4">
+    <div className="max-w-6xl mx-auto py-8 px-4">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Edit Design</h1>
 
-      {/* Warning modal shown when editing a published design for the first time */}
-      {showVersionWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-start gap-3">
-              <span className="text-2xl">📋</span>
-              <div>
-                <h2
-                  className="text-lg font-semibold"
-                  style={{ fontFamily: 'var(--font-body)', color: 'var(--color-text)' }}
-                >
-                  You're editing a published design
-                </h2>
-                <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                  Your changes will be saved as a private draft. {publishedVersionLabel} will remain
-                  publicly visible until you publish the new version.
-                </p>
-                <p className="text-sm mt-2" style={{ color: 'var(--color-text-muted)' }}>
-                  You can save your edits as many times as you like — nothing goes public until you
-                  click <strong>Publish</strong>.
-                </p>
+      <form onSubmit={handleSubmit}>
+        {isVersioned ? (
+          /* Two-column layout when editing a versioned (published) design */
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            <div className="lg:col-span-2 space-y-6">
+              <DesignForm values={values} onChange={setValues} lockedMethodology={isLocked} />
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={submitting} className="btn-primary text-sm disabled:opacity-50">
+                  {submitting ? 'Saving…' : 'Save changes'}
+                </button>
+                <button type="button" onClick={() => navigate(`/designs/${id}`)} className="btn-secondary text-sm">
+                  Cancel
+                </button>
               </div>
             </div>
+
+            {/* Sticky changelog sidebar */}
+            <div className="lg:sticky lg:top-6">
+              <div className="card p-5 space-y-3">
+                <h2
+                  className="text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: 'var(--color-text-muted)' }}
+                >
+                  Change Log
+                </h2>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  Summarise what changed in this version. This note will be attached when you
+                  publish.
+                </p>
+                <textarea
+                  rows={8}
+                  value={changelog}
+                  onChange={(e) => setChangelog(e.target.value)}
+                  placeholder="e.g. Clarified step 3, added safety note, updated sample size…"
+                  className="w-full input-sm resize-y text-sm"
+                  style={{ fontFamily: 'var(--font-body)' }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Single-column layout for new (never-published) drafts */
+          <div className="space-y-6">
+            <DesignForm values={values} onChange={setValues} lockedMethodology={isLocked} />
+            {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex gap-3 pt-2">
-              <button
-                className="btn-primary text-sm flex-1"
-                onClick={() => setShowVersionWarning(false)}
-              >
-                Got it, start editing
+              <button type="submit" disabled={submitting} className="btn-primary text-sm disabled:opacity-50">
+                {submitting ? 'Saving…' : 'Save changes'}
               </button>
-              <button
-                className="btn-secondary text-sm flex-1"
-                onClick={() => navigate(`/designs/${id}`)}
-              >
+              <button type="button" onClick={() => navigate(`/designs/${id}`)} className="btn-secondary text-sm">
                 Cancel
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <DesignForm values={values} onChange={setValues} lockedMethodology={isLocked} />
-
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
-        <div className="flex gap-3 pt-2">
-          <button type="submit" disabled={submitting} className="btn-primary text-sm disabled:opacity-50">
-            {submitting ? 'Saving…' : 'Save changes'}
-          </button>
-          <button type="button" onClick={() => navigate(`/designs/${id}`)} className="btn-secondary text-sm">
-            Cancel
-          </button>
-        </div>
+        )}
       </form>
     </div>
   )

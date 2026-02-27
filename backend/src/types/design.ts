@@ -123,6 +123,9 @@ export interface Design {
   seeking_collaborators: boolean
   collaboration_notes?: string
 
+  // Draft-only metadata (stripped from main doc on publish)
+  pending_changelog?: string   // changelog text saved while editing, auto-used on next publish
+
   // Metadata (system-managed)
   status: DesignStatus
   is_public: boolean           // true when status is 'published' or 'locked'
@@ -173,8 +176,10 @@ export interface CreateDesignBody {
   collaboration_notes?: string
 }
 
-// All CreateDesignBody fields are optional for updates
-export type UpdateDesignBody = Partial<CreateDesignBody>
+// All CreateDesignBody fields are optional for updates; pending_changelog is edit-only
+export interface UpdateDesignBody extends Partial<CreateDesignBody> {
+  pending_changelog?: string
+}
 
 export interface ForkDesignBody {
   fork_type: ForkType
