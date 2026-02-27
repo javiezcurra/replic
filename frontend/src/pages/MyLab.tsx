@@ -3,7 +3,10 @@ import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { Design } from '../types/design'
 import type { Material } from '../types/material'
+import type { CollaboratorEntry, UserPublicProfile } from '../types/user'
 import DesignCard from '../components/DesignCard'
+import UserProfileModal from '../components/UserProfileModal'
+import { fetchUserProfile } from '../lib/userProfileCache'
 
 // ─── Data types ───────────────────────────────────────────────────────────────
 
@@ -18,12 +21,6 @@ interface PipelineEntry {
 
 interface WatchlistEntry extends PipelineEntry {
   source: 'manual' | 'review'
-}
-
-interface CollaboratorEntry {
-  uid: string
-  displayName: string
-  affiliation: string | null
 }
 
 interface LabStats {
@@ -158,25 +155,25 @@ function SectionCard({
 
       {/* Card footer — buttons */}
       {hasButtons && (
-        <div className="px-4 pb-4 pt-2 flex gap-3">
-          {navButton && (
-            <Link
-              to={navButton.to}
-              className="flex-1 text-center text-sm font-semibold py-2.5 rounded-xl
-                         text-white hover:opacity-90 transition-all"
-              style={{ background: 'var(--color-dark)' }}
-            >
-              {navButton.label}
-            </Link>
-          )}
+        <div className="px-4 pb-4 pt-2 flex gap-3 justify-end">
           {actionButton && (
             <Link
               to={actionButton.to}
-              className="flex-1 text-center text-sm font-semibold py-2.5 rounded-xl
+              className="text-sm font-semibold px-4 py-2 rounded-xl
                          text-white hover:opacity-90 transition-all"
               style={{ background: 'var(--color-primary)' }}
             >
               {actionButton.label}
+            </Link>
+          )}
+          {navButton && (
+            <Link
+              to={navButton.to}
+              className="text-sm font-semibold px-4 py-2 rounded-xl
+                         text-white hover:opacity-90 transition-all"
+              style={{ background: 'var(--color-dark)' }}
+            >
+              {navButton.label}
             </Link>
           )}
         </div>
@@ -245,6 +242,8 @@ const SIDEBAR_SECTIONS = [
 // ─── Command Center layout ────────────────────────────────────────────────────
 
 function CommandCenter({ data }: { data: LabHubData }) {
+  const [profileModal, setProfileModal] = useState<UserPublicProfile | null>(null)
+
   const counts: Record<string, number> = {
     workbench:       data.workbench.length,
     pipeline:        data.pipeline.length,
@@ -254,7 +253,13 @@ function CommandCenter({ data }: { data: LabHubData }) {
     'lab-inventory': data.labStats.equipment + data.labStats.consumables,
   }
 
+  async function openProfile(uid: string) {
+    const profile = await fetchUserProfile(uid)
+    if (profile) setProfileModal(profile)
+  }
+
   return (
+    <>
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex gap-6 items-start">
 
       {/* ── Sidebar ── */}
@@ -401,7 +406,12 @@ function CommandCenter({ data }: { data: LabHubData }) {
           ) : (
             <div className="divide-y divide-gray-50">
               {data.collaborators.map((c) => (
-                <div key={c.uid} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                <button
+                  key={c.uid}
+                  onClick={() => openProfile(c.uid)}
+                  className="flex w-full items-center gap-3 px-2 py-2.5 -mx-2 rounded-lg
+                             hover:bg-surface transition-colors text-left group"
+                >
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center text-white
                                text-xs font-bold shrink-0"
@@ -410,12 +420,14 @@ function CommandCenter({ data }: { data: LabHubData }) {
                     {(c.displayName || c.uid).charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-ink truncate">{c.displayName || c.uid}</p>
+                    <p className="text-sm font-medium text-ink truncate group-hover:text-primary transition-colors">
+                      {c.displayName || c.uid}
+                    </p>
                     {c.affiliation && (
                       <p className="text-xs text-muted truncate">{c.affiliation}</p>
                     )}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -460,5 +472,10 @@ function CommandCenter({ data }: { data: LabHubData }) {
 
       </main>
     </div>
+
+    {profileModal && (
+      <UserProfileModal profile={profileModal} onClose={() => setProfileModal(null)} />
+    )}
+    </>
   )
 }
