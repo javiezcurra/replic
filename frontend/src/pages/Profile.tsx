@@ -214,6 +214,25 @@ export default function Profile() {
           />
         </div>
 
+        {/* Visibility notice */}
+        <div
+          className="rounded-xl border px-4 py-3 text-sm leading-relaxed"
+          style={{
+            borderColor: 'var(--color-accent)',
+            background: 'color-mix(in srgb, var(--color-accent) 20%, white)',
+            color: 'var(--color-text)',
+          }}
+        >
+          <p className="font-semibold mb-1" style={{ fontFamily: 'var(--font-body)' }}>
+            Your profile is visible to others
+          </p>
+          <p style={{ color: 'var(--color-text-muted)' }}>
+            Your <strong>Display name</strong>, <strong>Affiliation</strong>,{' '}
+            <strong>Role</strong>, and <strong>Bio</strong> are shown to other Replic users
+            when you review experiments or publish your own designs.
+          </p>
+        </div>
+
         {status === 'success' && (
           <p className="text-sm text-emerald-600">Profile saved.</p>
         )}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import ReviewForm from './ReviewForm'
+import UserDisplayName from './UserDisplayName'
 import type { Design } from '../types/design'
 import type { Material } from '../types/material'
 import type { Review, ReviewSummary, ReadinessSignal, SuggestionType } from '../types/review'
@@ -281,6 +282,7 @@ function ReviewCard({ review }: { review: Review }) {
     <div className="rounded-xl border border-surface-2 bg-white p-4 space-y-3">
       {/* Meta row */}
       <div className="flex flex-wrap items-center gap-2">
+        <UserDisplayName uid={review.reviewerId} className="text-xs font-medium" />
         {review.endorsement && (
           <span className="text-xs font-medium bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
             Endorsed
