@@ -843,6 +843,8 @@ export default function DesignDetail() {
           <div id="reviews-section" className="mt-2">
             <ReviewsSection
               designId={design.id}
+              design={viewedDesign}
+              materialMap={materialMap}
               isAuthor={isAuthor}
               isPublished={design.status === 'published'}
             />
