@@ -34,9 +34,48 @@ export interface UserProfile {
   affiliation: string | null
   role: UserRole | null
   is_admin: boolean
+  discoverable: boolean
   scores: UserScores
   createdAt: Timestamp
   updatedAt: Timestamp
+}
+
+// ── Collaboration ─────────────────────────────────────────────────────────────
+
+export type CollaborationStatus = 'pending' | 'accepted' | 'declined'
+
+export interface CollaborationRequest {
+  id: string
+  fromUid: string
+  toUid: string
+  status: CollaborationStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CollaborationRequestWithSender extends CollaborationRequest {
+  sender: UserSearchResult
+}
+
+export interface CollaboratorEntry {
+  uid: string
+  displayName: string
+  affiliation: string | null
+  role: UserRole | null
+  since: string
+}
+
+export interface UserRelationship {
+  isCollaborator: boolean
+  pendingRequestId: string | null
+  pendingDirection: 'incoming' | 'outgoing' | null
+}
+
+export interface UserSearchResult {
+  uid: string
+  displayName: string
+  affiliation: string | null
+  role: UserRole | null
 }
 
 export interface UserProfileResponse extends Omit<UserProfile, 'createdAt' | 'updatedAt'> {
@@ -52,6 +91,7 @@ export interface UpdateUserBody {
   bio?: string | null
   affiliation?: string | null
   role?: UserRole | null
+  discoverable?: boolean
   /** Dev-only self-promotion toggle — remove before production hardening */
   is_admin?: boolean
 }

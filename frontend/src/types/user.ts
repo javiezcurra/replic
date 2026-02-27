@@ -29,3 +29,36 @@ export interface UserPublicProfile {
   createdAt: string
   updatedAt: string
 }
+
+// ── Collaboration ─────────────────────────────────────────────────────────────
+
+export interface UserSearchResult {
+  uid: string
+  displayName: string
+  affiliation: string | null
+  role: UserRole | null
+}
+
+export interface UserRelationship {
+  isCollaborator: boolean
+  pendingRequestId: string | null
+  pendingDirection: 'incoming' | 'outgoing' | null
+}
+
+export interface CollaborationRequestWithSender {
+  id: string
+  fromUid: string
+  toUid: string
+  status: 'pending' | 'accepted' | 'declined'
+  createdAt: string | null
+  updatedAt: string | null
+  sender: UserSearchResult
+}
+
+export interface CollaboratorEntry {
+  uid: string
+  displayName: string
+  affiliation: string | null
+  role: UserRole | null
+  since: string | null
+}

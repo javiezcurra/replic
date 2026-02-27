@@ -36,6 +36,7 @@ interface UserProfile {
   affiliation?: string | null
   role?: UserRole | null
   is_admin?: boolean
+  discoverable?: boolean
 }
 
 interface ApiResponse<T> {
@@ -398,6 +399,10 @@ export default function Profile() {
   // Admin toggle
   const [togglingAdmin, setTogglingAdmin] = useState(false)
 
+  // Discoverability
+  const [discoverable, setDiscoverable] = useState(false)
+  const [savingDiscoverable, setSavingDiscoverable] = useState(false)
+
   useEffect(() => {
     api.get<ApiResponse<UserProfile>>('/api/users/me').then((res) => {
       const p = res.data
@@ -406,8 +411,23 @@ export default function Profile() {
       setBio(p.bio ?? '')
       setAffiliation(p.affiliation ?? '')
       setRole((p.role as UserRole) ?? '')
+      setDiscoverable(p.discoverable ?? false)
     })
   }, [])
+
+  async function handleDiscoverableToggle() {
+    const next = !discoverable
+    setDiscoverable(next)
+    setSavingDiscoverable(true)
+    try {
+      await api.patch('/api/users/me', { discoverable: next })
+    } catch {
+      // Revert on failure
+      setDiscoverable(!next)
+    } finally {
+      setSavingDiscoverable(false)
+    }
+  }
 
   function handleCancel() {
     setDisplayName(profile?.displayName ?? '')
@@ -673,6 +693,40 @@ export default function Profile() {
                 <ChangePasswordSection firebaseUser={user!} />
               </div>
             )}
+
+            <hr className="border-gray-100" />
+
+            {/* Discoverability */}
+            <div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                    Allow others to find you
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                    When enabled, other Replic users can find you by name in the Collaborators search.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDiscoverableToggle}
+                  disabled={savingDiscoverable}
+                  className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full
+                              border-2 transition-colors duration-200 focus:outline-none
+                              disabled:opacity-50 mt-0.5 ${
+                    discoverable
+                      ? 'border-transparent'
+                      : 'border-gray-300 bg-gray-200'
+                  }`}
+                  style={discoverable ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)' } : {}}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow
+                                transition-transform duration-200 ${discoverable ? 'translate-x-4' : 'translate-x-0.5'}`}
+                  />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

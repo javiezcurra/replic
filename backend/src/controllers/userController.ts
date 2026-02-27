@@ -6,6 +6,7 @@ import {
   UserProfileResponse,
   PublicUserProfileResponse,
   UpdateUserBody,
+  UserSearchResult,
   USER_ROLES,
 } from '../types/user'
 import { AppError } from '../middleware/errorHandler'
@@ -48,6 +49,7 @@ export async function upsertMe(
         affiliation: null,
         role: null,
         is_admin: false,
+        discoverable: false,
         scores: { designer: 0, experimenter: 0, reviewer: 0 },
         createdAt: now,
         updatedAt: now,
@@ -109,7 +111,7 @@ export async function updateMe(
       return next(error)
     }
 
-    const { displayName, photoURL, bio, affiliation, role, is_admin }: UpdateUserBody = req.body
+    const { displayName, photoURL, bio, affiliation, role, discoverable, is_admin }: UpdateUserBody = req.body
     const validRoles = USER_ROLES.map(r => r.value) as string[]
     if (role !== undefined && role !== null && !validRoles.includes(role)) {
       const error: AppError = new Error(`role must be one of: ${validRoles.join(', ')}`)
@@ -122,6 +124,7 @@ export async function updateMe(
     if (bio !== undefined) patch.bio = bio
     if (affiliation !== undefined) patch.affiliation = affiliation
     if (role !== undefined) patch.role = role
+    if (discoverable !== undefined) patch.discoverable = discoverable
     if (is_admin !== undefined) patch.is_admin = is_admin
 
     await ref.update(patch)
@@ -147,6 +150,34 @@ export async function getUser(
     }
     const data = toPublicResponse(snap.data() as UserProfile)
     res.status(200).json({ status: 'ok', data })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// GET /api/users/search?q=:query
+// Returns discoverable users whose displayName contains the query (case-insensitive).
+// Excludes the calling user. Max 20 results.
+export async function searchUsers(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const q = ((req.query.q as string) ?? '').trim().toLowerCase()
+    if (!q) {
+      res.status(200).json({ status: 'ok', data: [] })
+      return
+    }
+
+    const snap = await adminDb.collection(USERS).where('discoverable', '==', true).get()
+    const results: UserSearchResult[] = snap.docs
+      .map(d => d.data() as UserProfile)
+      .filter(p => p.uid !== req.user!.uid && p.displayName.toLowerCase().includes(q))
+      .slice(0, 20)
+      .map(p => ({ uid: p.uid, displayName: p.displayName, affiliation: p.affiliation, role: p.role }))
+
+    res.status(200).json({ status: 'ok', data: results })
   } catch (err) {
     next(err)
   }
