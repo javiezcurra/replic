@@ -12,6 +12,8 @@ import EditDesign from './pages/EditDesign'
 import DesignDetail from './pages/DesignDetail'
 import Materials from './pages/Materials'
 import CreateMaterial from './pages/CreateMaterial'
+import Login from './pages/Login'
+import Signup from './pages/Signup'
 
 export default function App() {
   return (
@@ -19,6 +21,8 @@ export default function App() {
       <Route path="/" element={<Layout />}>
         {/* Public */}
         <Route index element={<Home />} />
+        <Route path="login" element={<Login />} />
+        <Route path="signup" element={<Signup />} />
         <Route path="experiments" element={<Experiments />} />
         <Route path="designs/:id" element={<DesignDetail />} />
 
