@@ -7,8 +7,8 @@ import type { Material } from '../types/material'
 import MaterialCard from '../components/MaterialCard'
 import MaterialDetailModal from '../components/MaterialDetailModal'
 import ReviewsSection from '../components/ReviewsSection'
-import ReviewInbox from '../components/ReviewInbox'
 import UserDisplayName from '../components/UserDisplayName'
+import type { ReviewSummary } from '../types/review'
 
 const FORK_TYPES: { value: ForkType; label: string; description: string }[] = [
   { value: 'replication', label: 'Replication', description: 'Reproduce the same study to verify results' },
@@ -50,6 +50,8 @@ export default function DesignDetail() {
   const [materialMap, setMaterialMap] = useState<Record<string, Material>>({})
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
   const [refTitleMap, setRefTitleMap] = useState<Record<string, string>>({})
+  const [activeTab, setActiveTab] = useState<'design' | 'reviews'>('design')
+  const [reviewCount, setReviewCount] = useState(0)
 
   // Version selector state
   const [versions, setVersions] = useState<DesignVersionSummary[]>([])
@@ -118,6 +120,9 @@ export default function DesignDetail() {
       loadRefTitles(res.data.reference_experiment_ids ?? [])
       if (res.data.published_version > 0) {
         loadVersions()
+        api.get<{ status: string; data: ReviewSummary }>(`/api/designs/${id}/review-summary`)
+          .then(({ data: s }) => setReviewCount(s.reviewCount))
+          .catch(() => {})
       }
     } catch (err: any) {
       if (err?.status === 404) setNotFound(true)
@@ -445,8 +450,34 @@ export default function DesignDetail() {
         </div>
       )}
 
-      {/* ── Two-column layout + reviews ── */}
-      {!snapshotLoading && (
+      {/* ── Tab bar (published only) ── */}
+      {design.status === 'published' && (
+        <div className="flex border-b border-surface-2 mb-6 gap-1">
+          <button
+            onClick={() => setActiveTab('design')}
+            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === 'design'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted hover:text-ink'
+            }`}
+          >
+            Design
+          </button>
+          <button
+            onClick={() => setActiveTab('reviews')}
+            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === 'reviews'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted hover:text-ink'
+            }`}
+          >
+            Peer Reviews{reviewCount > 0 ? ` (${reviewCount})` : ''}
+          </button>
+        </div>
+      )}
+
+      {/* ── Two-column layout ── */}
+      {!snapshotLoading && activeTab === 'design' && (
         <>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
@@ -664,11 +695,7 @@ export default function DesignDetail() {
                 </button>
                 {design.status === 'published' && !isAuthor && user && (
                   <button
-                    onClick={() =>
-                      document
-                        .getElementById('reviews-section')
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }
+                    onClick={() => setActiveTab('reviews')}
                     className="w-full btn-secondary text-sm justify-center"
                   >
                     Review Experiment
@@ -676,11 +703,7 @@ export default function DesignDetail() {
                 )}
                 {design.status === 'published' && isAuthor && (
                   <button
-                    onClick={() =>
-                      document
-                        .getElementById('reviews-section')
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }
+                    onClick={() => setActiveTab('reviews')}
                     className="w-full btn-secondary text-sm justify-center"
                   >
                     View Reviews
@@ -715,7 +738,7 @@ export default function DesignDetail() {
                         onClick={handleEditClick}
                         className="block w-full btn-secondary text-sm text-center justify-center"
                       >
-                        Edit
+                        {reviewCount > 0 ? 'Edit with Reviews' : 'Edit'}
                       </button>
                     )}
                     {canPublish && (
@@ -802,26 +825,19 @@ export default function DesignDetail() {
           </div>
         </div>
 
-        {/* ── Reviews section (full-width, below columns) ── */}
-        {design.status === 'published' && (
-          <div id="reviews-section" className="mt-2">
-            <ReviewsSection
-              designId={design.id}
-              design={viewedDesign}
-              materialMap={materialMap}
-              isAuthor={isAuthor}
-              isPublished={design.status === 'published'}
-            />
-          </div>
-        )}
-
-        {/* ── Review inbox (owner-only, below reviews section) ── */}
-        {isAuthor && design.status === 'published' && selectedSnapshot === null && (
-          <div className="mt-4">
-            <ReviewInbox designId={design.id} />
-          </div>
-        )}
         </>
+      )}
+
+      {/* ── Reviews tab ── */}
+      {!snapshotLoading && design.status === 'published' && activeTab === 'reviews' && (
+        <ReviewsSection
+          designId={design.id}
+          design={viewedDesign}
+          materialMap={materialMap}
+          isAuthor={isAuthor}
+          isPublished={design.status === 'published'}
+          onReviewCountChange={setReviewCount}
+        />
       )}
 
       {/* ── Edit warning modal ── */}
