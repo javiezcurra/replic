@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { Design, DesignMaterial, DataType } from '../types/design'
 import type { Material } from '../types/material'
+import type { CollaboratorEntry } from '../types/user'
 import type { Review, FieldSuggestion, ReadinessSignal, SuggestionType } from '../types/review'
 import DesignForm, { defaultFormValues, formValuesToBody, type DesignFormValues } from '../components/DesignForm'
 import UserDisplayName from '../components/UserDisplayName'
@@ -85,6 +86,8 @@ function designToFormValues(d: Design): DesignFormValues {
     collaboration_notes: d.collaboration_notes ?? '',
     ethical_considerations: d.ethical_considerations ?? '',
     disclaimers: d.disclaimers ?? '',
+    // Placeholder uids; loadCoauthorDetails() will fill in display names.
+    coauthors: (d.coauthor_uids ?? []).map((uid) => ({ uid, displayName: uid })),
   }
 }
 
@@ -106,6 +109,23 @@ export default function EditDesign() {
   const [reviewIdx, setReviewIdx] = useState(0)
   const [loadingReviews, setLoadingReviews] = useState(false)
   const [applyToast, setApplyToast] = useState<string | null>(null)
+
+  async function loadCoauthorDetails(coauthorUids: string[]) {
+    if (!coauthorUids.length) return
+    try {
+      const res = await api.get<{ status: string; data: CollaboratorEntry[] }>('/api/users/me/collaborators')
+      const nameMap: Record<string, string> = {}
+      res.data.forEach((c) => { nameMap[c.uid] = c.displayName })
+      setValues((prev) => ({
+        ...prev,
+        coauthors: prev.coauthors.map((c) =>
+          nameMap[c.uid] ? { ...c, displayName: nameMap[c.uid] } : c,
+        ),
+      }))
+    } catch {
+      // non-critical — placeholder uids remain
+    }
+  }
 
   async function loadMaterialDetails(designMaterials: DesignMaterial[]) {
     if (!designMaterials.length) return
@@ -143,6 +163,7 @@ export default function EditDesign() {
         setDesign(d)
         setValues(designToFormValues(d))
         loadMaterialDetails(d.materials)
+        if (d.coauthor_uids?.length) loadCoauthorDetails(d.coauthor_uids)
         setChangelog(d.pending_changelog ?? '')
         if (d.published_version > 0) {
           loadReviews()

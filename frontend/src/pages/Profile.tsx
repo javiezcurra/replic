@@ -525,6 +525,38 @@ export default function Profile() {
             </div>
           </div>
 
+          {/* Discoverability card */}
+          <div className="card p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-dark)' }}>
+                  Allow others to find you
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                  When enabled, other Replic users can search for and connect with you from the Collaborators page.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDiscoverableToggle}
+                disabled={savingDiscoverable}
+                className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full
+                            border-2 transition-colors duration-200 focus:outline-none
+                            disabled:opacity-50 mt-0.5 ${
+                  discoverable
+                    ? 'border-transparent'
+                    : 'border-gray-300 bg-gray-200'
+                }`}
+                style={discoverable ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)' } : {}}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow
+                              transition-transform duration-200 ${discoverable ? 'translate-x-4' : 'translate-x-0.5'}`}
+                />
+              </button>
+            </div>
+          </div>
+
           {/* Dev admin toggle */}
           <div className="rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-4">
             <div className="flex items-center justify-between gap-4">
@@ -694,39 +726,6 @@ export default function Profile() {
               </div>
             )}
 
-            <hr className="border-gray-100" />
-
-            {/* Discoverability */}
-            <div>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                    Allow others to find you
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-                    When enabled, other Replic users can find you by name in the Collaborators search.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDiscoverableToggle}
-                  disabled={savingDiscoverable}
-                  className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full
-                              border-2 transition-colors duration-200 focus:outline-none
-                              disabled:opacity-50 mt-0.5 ${
-                    discoverable
-                      ? 'border-transparent'
-                      : 'border-gray-300 bg-gray-200'
-                  }`}
-                  style={discoverable ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)' } : {}}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow
-                                transition-transform duration-200 ${discoverable ? 'translate-x-4' : 'translate-x-0.5'}`}
-                  />
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 

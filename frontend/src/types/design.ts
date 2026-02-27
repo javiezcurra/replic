@@ -82,6 +82,7 @@ export interface Design {
   ethical_considerations?: string
   disclaimers?: string
   collaboration_notes?: string
+  coauthor_uids: string[]
   created_at: string
   updated_at: string
 }
@@ -106,6 +107,7 @@ export interface CreateDesignBody {
   collaboration_notes?: string
   ethical_considerations?: string
   disclaimers?: string
+  coauthor_uids?: string[]
 }
 
 export interface UpdateDesignBody extends Partial<CreateDesignBody> {

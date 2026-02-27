@@ -7,6 +7,7 @@ import {
   acceptCollaborationRequest,
   declineCollaborationRequest,
   listCollaborators,
+  removeCollaborator,
   getRelationship,
 } from '../controllers/collaboratorController'
 
@@ -25,6 +26,7 @@ router.get('/me/collaboration-requests', getCollaborationRequests)
 router.post('/me/collaboration-requests/:requestId/accept', acceptCollaborationRequest)
 router.post('/me/collaboration-requests/:requestId/decline', declineCollaborationRequest)
 router.get('/me/collaborators', listCollaborators)
+router.delete('/me/collaborators/:uid', removeCollaborator)
 
 // User search — must be before /:id
 router.get('/search', searchUsers)

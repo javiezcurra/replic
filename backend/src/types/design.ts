@@ -122,6 +122,7 @@ export interface Design {
   disclaimers?: string
   seeking_collaborators: boolean
   collaboration_notes?: string
+  coauthor_uids: string[]
 
   // Draft-only metadata (stripped from main doc on publish)
   pending_changelog?: string   // changelog text saved while editing, auto-used on next publish
@@ -174,6 +175,7 @@ export interface CreateDesignBody {
   disclaimers?: string
   seeking_collaborators?: boolean
   collaboration_notes?: string
+  coauthor_uids?: string[]
 }
 
 // All CreateDesignBody fields are optional for updates; pending_changelog is edit-only

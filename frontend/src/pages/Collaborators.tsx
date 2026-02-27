@@ -54,6 +54,7 @@ export default function Collaborators() {
 
   const [collaborators, setCollaborators] = useState<CollaboratorEntry[]>([])
   const [collaboratorsLoading, setCollaboratorsLoading] = useState(true)
+  const [removeLoadingId, setRemoveLoadingId] = useState<string | null>(null)
 
   const [modalProfile, setModalProfile] = useState<UserPublicProfile | null>(null)
 
@@ -160,6 +161,22 @@ export default function Collaborators() {
     }
   }
 
+  async function handleRemoveCollaborator(uid: string) {
+    setRemoveLoadingId(uid)
+    try {
+      await api.delete(`/api/users/me/collaborators/${uid}`)
+      setCollaborators(prev => prev.filter(c => c.uid !== uid))
+      // Update search results if visible
+      setSearchResults(prev =>
+        prev.map(r => r.uid === uid ? { ...r, relState: 'none' as SearchItemState } : r),
+      )
+    } catch {
+      //
+    } finally {
+      setRemoveLoadingId(null)
+    }
+  }
+
   async function handleDecline(req: CollaborationRequestWithSender) {
     setActionLoadingId(req.id)
     try {
@@ -177,23 +194,21 @@ export default function Collaborators() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
         {/* Header */}
-        <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
-          <div>
-            <h1
-              className="text-5xl sm:text-6xl text-ink"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              Collaborators
-            </h1>
-            <p className="mt-2 text-lg text-plum">
-              Find and connect with other researchers.
-            </p>
-          </div>
+        <div className="mb-8">
+          <h1
+            className="text-5xl sm:text-6xl text-ink"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            Collaborators
+          </h1>
+          <p className="mt-2 text-lg" style={{ color: 'var(--color-secondary)' }}>
+            Find and connect with other researchers.
+          </p>
 
           {/* Search */}
-          <div className="relative w-full sm:w-72">
+          <div className="relative mt-5">
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
               fill="none" stroke="currentColor" viewBox="0 0 24 24"
               style={{ color: 'var(--color-text-muted)' }}
             >
@@ -203,8 +218,13 @@ export default function Collaborators() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name…"
-              className="input w-full pl-9"
+              placeholder="Search for researchers by name…"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border-2 bg-white focus:outline-none focus:ring-2 transition-colors"
+              style={{
+                borderColor: 'var(--color-secondary)',
+                color: 'var(--color-text)',
+                '--tw-ring-color': 'var(--color-primary)',
+              } as React.CSSProperties}
             />
           </div>
         </div>
@@ -345,11 +365,21 @@ export default function Collaborators() {
                       )}
                     </div>
                   </div>
-                  {col.since && (
-                    <span className="text-xs shrink-0" style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                      {new Date(col.since).toLocaleDateString()}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-3 shrink-0">
+                    {col.since && (
+                      <span className="text-xs hidden sm:block" style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
+                        {new Date(col.since).toLocaleDateString()}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleRemoveCollaborator(col.uid)}
+                      disabled={removeLoadingId === col.uid}
+                      className="text-xs font-medium hover:opacity-80 transition-opacity disabled:opacity-40"
+                      style={{ color: 'var(--color-text-muted)' }}
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
