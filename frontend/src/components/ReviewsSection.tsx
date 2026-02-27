@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import ReviewForm from './ReviewForm'
@@ -35,16 +35,6 @@ function formatFieldRef(fieldRef: string): string {
   return `${displayName} #${sub}`
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
-
-interface Props {
-  designId: string
-  design: Design
-  materialMap: Record<string, Material>
-  isAuthor: boolean
-  isPublished: boolean
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const READINESS_LABELS: Record<ReadinessSignal, string> = {
@@ -79,24 +69,41 @@ function formatDate(iso: string): string {
   })
 }
 
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface Props {
+  designId: string
+  design: Design
+  materialMap: Record<string, Material>
+  isAuthor: boolean
+  isPublished: boolean
+  onReviewCountChange?: (count: number) => void
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ReviewsSection({ designId, design, materialMap, isAuthor, isPublished }: Props) {
+export default function ReviewsSection({
+  designId,
+  design,
+  materialMap,
+  isAuthor,
+  isPublished,
+  onReviewCountChange,
+}: Props) {
   const { user } = useAuth()
   const [summary, setSummary] = useState<ReviewSummary | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
   const [loadingReviews, setLoadingReviews] = useState(false)
   const [showForm, setShowForm] = useState(false)
-  const [showReviews, setShowReviews] = useState(false)
-  const [summaryError, setSummaryError] = useState('')
   const [editingReview, setEditingReview] = useState<Review | undefined>(undefined)
 
   const canReview = !!user && !isAuthor && isPublished && (summary?.reviewable ?? false)
-  // userHasReviewed comes from the summary (server-authoritative); fall back to local check
   const alreadyReviewed = summary?.userHasReviewed ?? reviews.some((r) => r.reviewerId === user?.uid)
 
   useEffect(() => {
+    if (!isPublished) return
     loadSummary()
+    loadReviews()
   }, [designId])
 
   async function loadSummary() {
@@ -105,36 +112,39 @@ export default function ReviewsSection({ designId, design, materialMap, isAuthor
         `/api/designs/${designId}/review-summary`,
       )
       setSummary(res.data)
+      onReviewCountChange?.(res.data.reviewCount)
     } catch {
-      setSummaryError('Could not load review summary.')
+      // non-critical
     }
   }
 
-  async function loadReviews(): Promise<Review[]> {
-    if (loadingReviews) return reviews
+  async function loadReviews() {
+    if (loadingReviews) return
     setLoadingReviews(true)
     try {
       const res = await api.get<{ status: string; data: Review[] }>(
         `/api/designs/${designId}/reviews`,
       )
       setReviews(res.data)
-      return res.data
     } catch {
-      return reviews
+      // non-critical
     } finally {
       setLoadingReviews(false)
     }
   }
 
-  function handleToggleReviews() {
-    const next = !showReviews
-    setShowReviews(next)
-    if (next && reviews.length === 0) loadReviews()
-  }
-
   async function handleEditReview() {
     let current = reviews
-    if (reviews.length === 0) current = await loadReviews()
+    if (reviews.length === 0) {
+      setLoadingReviews(true)
+      try {
+        const res = await api.get<{ status: string; data: Review[] }>(`/api/designs/${designId}/reviews`)
+        setReviews(res.data)
+        current = res.data
+      } finally {
+        setLoadingReviews(false)
+      }
+    }
     const mine = user ? current.find((r) => r.reviewerId === user.uid) : undefined
     setEditingReview(mine)
     setShowForm(true)
@@ -152,78 +162,44 @@ export default function ReviewsSection({ designId, design, materialMap, isAuthor
     })
     setShowForm(false)
     setEditingReview(undefined)
-    setShowReviews(true)
-    // Reload summary from server since counts may have changed
     loadSummary()
   }
+
+  // Pin the current user's review first; sort others newest-first
+  const sortedReviews = useMemo(() => {
+    const myUid = user?.uid
+    const mine = myUid ? reviews.find((r) => r.reviewerId === myUid) : null
+    const others = reviews.filter((r) => r.id !== mine?.id)
+    others.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return mine ? [mine, ...others] : others
+  }, [reviews, user?.uid])
 
   if (!isPublished) return null
 
   return (
-    <section className="card p-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 mb-5">
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-muted mb-1">
-            Peer Reviews
-          </h2>
-          {summary && (
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-              <span className="text-ink">
-                <span className="font-medium">{summary.reviewCount}</span>{' '}
-                {summary.reviewCount === 1 ? 'review' : 'reviews'}
-              </span>
-              <span className="text-ink">
-                <span className="font-medium">{summary.endorsementCount}</span>{' '}
-                {summary.endorsementCount === 1 ? 'endorsement' : 'endorsements'}
-              </span>
-              {summary.isLocked && (
-                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full self-center">
-                  Locked
-                </span>
-              )}
-            </div>
-          )}
-          {summaryError && (
-            <p className="text-xs text-muted">{summaryError}</p>
-          )}
-        </div>
+    <div className="space-y-4">
 
-        {/* Actions */}
-        <div className="flex items-center gap-2 shrink-0">
-          {(summary?.reviewCount ?? 0) + (summary?.endorsementCount ?? 0) > 0 && (
-            <button
-              onClick={handleToggleReviews}
-              className="btn-secondary text-xs"
-            >
-              {showReviews ? 'Hide' : 'View'} reviews
-            </button>
-          )}
-          {canReview && !alreadyReviewed && !showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="btn-primary text-xs"
-            >
-              Write a review
-            </button>
-          )}
-          {canReview && alreadyReviewed && !showForm && (
-            <button
-              onClick={handleEditReview}
-              className="btn-secondary text-xs"
-            >
-              Edit your review
-            </button>
-          )}
-          {!user && isPublished && !isAuthor && (
-            <p className="text-xs text-muted italic">Sign in to leave a review</p>
-          )}
-        </div>
-      </div>
+      {/* Write / edit review button */}
+      {!showForm && canReview && (
+        alreadyReviewed ? (
+          <button onClick={handleEditReview} className="btn-secondary text-sm">
+            Edit your review
+          </button>
+        ) : (
+          <button onClick={() => setShowForm(true)} className="btn-primary text-sm">
+            Review Experiment
+          </button>
+        )
+      )}
+
+      {/* Sign-in prompt */}
+      {!user && !isAuthor && (
+        <p className="text-sm text-muted italic">Sign in to leave a review.</p>
+      )}
 
       {/* Review form */}
       {showForm && (
-        <div className="mb-5 rounded-xl border border-surface-2 bg-surface p-5">
+        <div className="rounded-xl border border-surface-2 bg-surface p-5">
           <h3 className="text-sm font-semibold text-ink mb-4">
             {editingReview ? 'Edit your review' : 'Write a review'}
           </h3>
@@ -238,115 +214,155 @@ export default function ReviewsSection({ designId, design, materialMap, isAuthor
         </div>
       )}
 
-      {/* Review list */}
-      {showReviews && (
-        <div className="space-y-4">
-          {loadingReviews && (
-            <div className="flex justify-center py-6">
-              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            </div>
-          )}
-
-          {!loadingReviews && reviews.length === 0 && (
-            <p className="text-sm text-muted text-center py-4">No reviews yet.</p>
-          )}
-
-          {reviews.map((review) => (
-            <ReviewCard key={review.id} review={review} />
-          ))}
+      {/* Loading */}
+      {loadingReviews && (
+        <div className="flex justify-center py-8">
+          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 
-      {/* Empty state when no reviews and no form */}
-      {!showForm && !showReviews && summary &&
-        summary.reviewCount === 0 && summary.endorsementCount === 0 && (
-        <p className="text-sm text-muted">
+      {/* Empty state */}
+      {!loadingReviews && sortedReviews.length === 0 && (
+        <p className="text-sm text-muted py-2">
           No reviews yet.{' '}
-          {canReview
-            ? 'Be the first to review this design.'
-            : 'Share this design to invite feedback.'}
+          {canReview ? 'Be the first to review this design.' : isAuthor ? 'Share this design to invite feedback.' : ''}
         </p>
       )}
-    </section>
+
+      {/* Review list — collapsible cards */}
+      {!loadingReviews && sortedReviews.map((review) => (
+        <CollapsibleReviewCard
+          key={review.id}
+          review={review}
+          isOwn={review.reviewerId === user?.uid}
+          onEdit={handleEditReview}
+        />
+      ))}
+    </div>
   )
 }
 
-// ─── ReviewCard ───────────────────────────────────────────────────────────────
+// ─── CollapsibleReviewCard ─────────────────────────────────────────────────────
 
-function ReviewCard({ review }: { review: Review }) {
-  const [expanded, setExpanded] = useState(false)
-  const hasSuggestions = review.suggestions.length > 0
-  const visibleSuggestions = expanded ? review.suggestions : review.suggestions.slice(0, 2)
+interface CardProps {
+  review: Review
+  isOwn: boolean
+  onEdit: () => void
+}
+
+function CollapsibleReviewCard({ review, isOwn, onEdit }: CardProps) {
+  const [collapsed, setCollapsed] = useState(true)
+  const suggestionCount = review.suggestions.length
 
   return (
-    <div className="rounded-xl border border-surface-2 bg-white p-4 space-y-3">
-      {/* Meta row */}
-      <div className="flex flex-wrap items-center gap-2">
-        <UserDisplayName uid={review.reviewerId} className="text-xs font-medium" />
-        {review.endorsement && (
-          <span className="text-xs font-medium bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
-            Endorsed
-          </span>
-        )}
-        {review.readinessSignal && (
-          <span
-            className={`text-xs font-medium px-2 py-0.5 rounded-full ${READINESS_COLORS[review.readinessSignal]}`}
-          >
-            {READINESS_LABELS[review.readinessSignal]}
-          </span>
-        )}
-        <span className="text-xs text-muted ml-auto">{formatDate(review.createdAt)}</span>
-      </div>
+    <div className="rounded-xl border border-surface-2 bg-white overflow-hidden">
 
-      {/* General comment */}
-      {review.generalComment && (
-        <p className="text-sm text-gray-800 leading-relaxed">{review.generalComment}</p>
-      )}
-
-      {/* Suggestions */}
-      {hasSuggestions && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted uppercase tracking-widest">
-            {review.suggestions.length} field suggestion{review.suggestions.length !== 1 ? 's' : ''}
-          </p>
-          {visibleSuggestions.map((s) => (
-            <div
-              key={s.id}
-              className="rounded-lg border border-surface-2 bg-surface px-3 py-2 space-y-1"
+      {/* Header — always visible, click to toggle */}
+      <button
+        type="button"
+        onClick={() => setCollapsed((v) => !v)}
+        className="w-full text-left px-4 py-3 hover:bg-surface/50 transition-colors"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          {isOwn && (
+            <span
+              className="text-xs font-semibold px-2 py-0.5 rounded-full text-white shrink-0"
+              style={{ background: 'var(--color-secondary)' }}
             >
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span
-                  className="text-xs font-medium px-2 py-0.5 rounded-full bg-dark/5 text-ink"
+              Your review
+            </span>
+          )}
+          <UserDisplayName uid={review.reviewerId} className="text-sm font-medium" />
+          <span className="text-xs text-muted">{formatDate(review.createdAt)}</span>
+          {review.versionNumber > 0 && (
+            <span
+              className="text-xs px-1.5 py-0.5 rounded"
+              style={{
+                fontFamily: 'var(--font-mono)',
+                background: 'var(--color-accent)',
+                color: 'var(--color-dark)',
+              }}
+            >
+              v{review.versionNumber}
+            </span>
+          )}
+          {review.endorsement && (
+            <span className="text-xs font-medium bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
+              Endorsed
+            </span>
+          )}
+          {review.readinessSignal && (
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${READINESS_COLORS[review.readinessSignal]}`}>
+              {READINESS_LABELS[review.readinessSignal]}
+            </span>
+          )}
+          {suggestionCount > 0 && (
+            <span className="text-xs text-muted">
+              {suggestionCount} field suggestion{suggestionCount !== 1 ? 's' : ''}
+            </span>
+          )}
+          <span className="ml-auto text-xs text-muted shrink-0">
+            {collapsed ? '▸' : '▾'}
+          </span>
+        </div>
+      </button>
+
+      {/* Expanded body */}
+      {!collapsed && (
+        <div className="border-t border-surface-2 px-4 pb-4 pt-3 space-y-3">
+
+          {review.generalComment && (
+            <p className="text-sm text-gray-800 leading-relaxed">{review.generalComment}</p>
+          )}
+
+          {review.suggestions.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted uppercase tracking-widest">
+                {review.suggestions.length} field suggestion{review.suggestions.length !== 1 ? 's' : ''}
+              </p>
+              {review.suggestions.map((s) => (
+                <div
+                  key={s.id}
+                  className="rounded-lg border border-surface-2 bg-surface px-3 py-2 space-y-1"
                 >
-                  {s.fieldRef ? formatFieldRef(s.fieldRef) : `${s.newFieldName} (new)`}
-                </span>
-                {s.suggestionType && (
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${SUGGESTION_TYPE_COLORS[s.suggestionType]}`}
-                  >
-                    {SUGGESTION_TYPE_LABELS[s.suggestionType]}
-                  </span>
-                )}
-              </div>
-              {s.proposedText && (
-                <p className="text-xs text-ink leading-relaxed">
-                  <span className="font-medium text-muted">Proposed: </span>
-                  {s.proposedText}
-                </p>
-              )}
-              {s.comment && (
-                <p className="text-xs text-muted leading-relaxed italic">{s.comment}</p>
-              )}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-dark/5 text-ink">
+                      {s.fieldRef ? formatFieldRef(s.fieldRef) : `${s.newFieldName} (new)`}
+                    </span>
+                    {s.suggestionType && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${SUGGESTION_TYPE_COLORS[s.suggestionType]}`}>
+                        {SUGGESTION_TYPE_LABELS[s.suggestionType]}
+                      </span>
+                    )}
+                  </div>
+                  {s.proposedText && (
+                    <p className="text-xs text-ink leading-relaxed">
+                      <span className="font-medium text-muted">Proposed: </span>
+                      {s.proposedText}
+                    </p>
+                  )}
+                  {s.comment && (
+                    <p className="text-xs text-muted leading-relaxed italic">{s.comment}</p>
+                  )}
+                  {s.ownerReply && (
+                    <div className="mt-1 rounded px-2 py-1.5" style={{ background: 'var(--color-accent)' }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest mb-0.5" style={{ color: 'var(--color-dark)' }}>
+                        Owner reply
+                      </p>
+                      <p className="text-xs" style={{ color: 'var(--color-dark)' }}>{s.ownerReply}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-          {review.suggestions.length > 2 && (
+          )}
+
+          {isOwn && (
             <button
-              onClick={() => setExpanded((p) => !p)}
+              onClick={(e) => { e.stopPropagation(); onEdit() }}
               className="text-xs text-primary hover:underline"
             >
-              {expanded
-                ? 'Show fewer'
-                : `Show ${review.suggestions.length - 2} more suggestion${review.suggestions.length - 2 !== 1 ? 's' : ''}`}
+              Edit your review
             </button>
           )}
         </div>
