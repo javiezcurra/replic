@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
-import type { Design, DesignMaterial, ForkType } from '../types/design'
+import type { Design, DesignMaterial, ForkType, DesignVersionSummary, DesignVersionSnapshot } from '../types/design'
 import type { Material } from '../types/material'
 import MaterialCard from '../components/MaterialCard'
 import MaterialDetailModal from '../components/MaterialDetailModal'
@@ -48,6 +48,14 @@ export default function DesignDetail() {
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
   const [refTitleMap, setRefTitleMap] = useState<Record<string, string>>({})
 
+  // Version selector state
+  const [versions, setVersions] = useState<DesignVersionSummary[]>([])
+  // 'current' = latest state (draft for owner-with-draft, published for others)
+  // 'vN' = a specific published version snapshot
+  const [selectorKey, setSelectorKey] = useState<string>('current')
+  const [selectedSnapshot, setSelectedSnapshot] = useState<DesignVersionSnapshot | null>(null)
+  const [snapshotLoading, setSnapshotLoading] = useState(false)
+
   async function loadMaterials(materials: DesignMaterial[]) {
     if (!materials.length) return
     const results = await Promise.allSettled(
@@ -76,12 +84,26 @@ export default function DesignDetail() {
     setRefTitleMap(map)
   }
 
+  async function loadVersions() {
+    try {
+      const res = await api.get<{ status: string; data: DesignVersionSummary[] }>(
+        `/api/designs/${id}/versions`
+      )
+      setVersions(res.data)
+    } catch {
+      // Version history is non-critical; silently ignore errors
+    }
+  }
+
   async function loadDesign() {
     try {
       const res = await api.get<{ status: string; data: Design }>(`/api/designs/${id}`)
       setDesign(res.data)
       loadMaterials(res.data.materials)
       loadRefTitles(res.data.reference_experiment_ids ?? [])
+      if (res.data.published_version > 0) {
+        loadVersions()
+      }
     } catch (err: any) {
       if (err?.status === 404) setNotFound(true)
       else setError(err?.message ?? 'Failed to load')
@@ -97,11 +119,35 @@ export default function DesignDetail() {
     loadDesign()
   }, [id, authLoading])
 
+  async function handleVersionSelect(key: string) {
+    setSelectorKey(key)
+    if (key === 'current') {
+      setSelectedSnapshot(null)
+      return
+    }
+    const versionNum = key.replace('v', '')
+    setSnapshotLoading(true)
+    try {
+      const res = await api.get<{ status: string; data: DesignVersionSnapshot }>(
+        `/api/designs/${id}/versions/${versionNum}`
+      )
+      setSelectedSnapshot(res.data)
+    } catch {
+      setError('Failed to load that version')
+      setSelectorKey('current')
+      setSelectedSnapshot(null)
+    } finally {
+      setSnapshotLoading(false)
+    }
+  }
+
   async function handlePublish() {
     setPublishing(true)
     try {
       await api.post(`/api/designs/${id}/publish`)
       await loadDesign()
+      setSelectedSnapshot(null)
+      setSelectorKey('current')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to publish')
     } finally {
@@ -158,26 +204,60 @@ export default function DesignDetail() {
     )
   }
 
-  // Narrow the type — all null/error states are handled above.
   if (!design) return null
 
   const isAuthor  = user ? design.author_ids.includes(user.uid) : false
-  const canPublish = isAuthor && design.status === 'draft'
-  const canEdit    = isAuthor && design.status !== 'locked'
+  // Publish is available for pure drafts OR published designs with unsaved changes,
+  // but only when the author is viewing the current (not a historical) state.
+  const canPublish = isAuthor && selectedSnapshot === null &&
+    (design.status === 'draft' || design.has_draft_changes)
+  const canEdit    = isAuthor && design.status !== 'locked' && selectedSnapshot === null
   const canFork    = !!user && !isAuthor && design.status === 'published'
 
+  // The design data actually rendered in the content area.
+  // When a historical version is selected, the snapshot's data is used;
+  // otherwise the API response is used (which is the draft for authors, published for others).
+  const viewedDesign: Design = selectedSnapshot?.data ?? design
+
   const hasVariables =
-    (design.independent_variables?.length ?? 0) > 0 ||
-    (design.dependent_variables?.length    ?? 0) > 0 ||
-    (design.controlled_variables?.length   ?? 0) > 0
+    (viewedDesign.independent_variables?.length ?? 0) > 0 ||
+    (viewedDesign.dependent_variables?.length    ?? 0) > 0 ||
+    (viewedDesign.controlled_variables?.length   ?? 0) > 0
 
   const hasSidebarDetails =
-    !!design.safety_considerations ||
-    design.sample_size != null ||
-    !!design.analysis_plan ||
-    !!design.ethical_considerations ||
-    !!design.disclaimers ||
-    (design.reference_experiment_ids?.length ?? 0) > 0
+    !!viewedDesign.safety_considerations ||
+    viewedDesign.sample_size != null ||
+    !!viewedDesign.analysis_plan ||
+    !!viewedDesign.ethical_considerations ||
+    !!viewedDesign.disclaimers ||
+    (viewedDesign.reference_experiment_ids?.length ?? 0) > 0
+
+  // Show the version selector when there are published versions or an owner-only draft option.
+  const hasDraftOption = isAuthor && design.has_draft_changes
+  const showVersionSelector = versions.length > 0 || hasDraftOption
+
+  // In the selector, the 'current' option label changes based on context.
+  const currentOptionLabel = hasDraftOption
+    ? 'Draft (unpublished)'
+    : design.published_version > 0
+    ? `v${design.published_version} (latest)`
+    : 'Current'
+
+  // Historical versions in the selector: exclude the latest published when viewing as non-author
+  // (since 'current' already represents it). Include all versions for authors-with-draft.
+  const versionOptions = hasDraftOption
+    ? versions
+    : versions.filter((v) => v.version_number !== design.published_version)
+
+  const isViewingHistorical =
+    selectedSnapshot !== null &&
+    selectedSnapshot.version_number !== design.published_version
+
+  const isViewingPublishedAsAuthorWithDraft =
+    selectedSnapshot !== null &&
+    isAuthor &&
+    design.has_draft_changes &&
+    selectedSnapshot.version_number === design.published_version
 
   return (
     <div className="max-w-6xl mx-auto py-8 px-4">
@@ -193,15 +273,15 @@ export default function DesignDetail() {
       <header className="mb-8">
         {/* Tags row */}
         <div className="flex flex-wrap items-center gap-1.5 mb-3">
-          {design.discipline_tags.map((tag) => (
+          {viewedDesign.discipline_tags.map((tag) => (
             <span key={tag} className="text-xs bg-surface-2 text-muted px-2 py-0.5 rounded-full">
               {tag}
             </span>
           ))}
           <span
-            className={`text-xs font-medium px-2 py-0.5 rounded-full ${DIFFICULTY_COLORS[design.difficulty_level] ?? 'bg-gray-100 text-gray-600'}`}
+            className={`text-xs font-medium px-2 py-0.5 rounded-full ${DIFFICULTY_COLORS[viewedDesign.difficulty_level] ?? 'bg-gray-100 text-gray-600'}`}
           >
-            {design.difficulty_level}
+            {viewedDesign.difficulty_level}
           </span>
           {design.status !== 'published' && (
             <span
@@ -214,31 +294,98 @@ export default function DesignDetail() {
               {design.status.charAt(0).toUpperCase() + design.status.slice(1)}
             </span>
           )}
+          {isAuthor && design.has_draft_changes && selectedSnapshot === null && (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+              Unpublished draft
+            </span>
+          )}
         </div>
 
-        {/* Title */}
-        <h1 className="text-3xl font-display font-bold text-dark leading-tight">
-          {design.title}
-        </h1>
+        {/* Title + version selector */}
+        <div className="flex flex-wrap items-start gap-3">
+          <h1 className="text-3xl font-display font-bold text-dark leading-tight flex-1">
+            {viewedDesign.title}
+          </h1>
+          {showVersionSelector && (
+            <div className="flex items-center gap-2 shrink-0 mt-1">
+              <label className="text-xs text-muted">Version</label>
+              <select
+                value={selectorKey}
+                onChange={(e) => handleVersionSelect(e.target.value)}
+                className="text-xs border border-surface-2 rounded-lg px-2 py-1 bg-white text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
+                style={{ fontFamily: 'var(--font-mono)' }}
+              >
+                <option value="current">{currentOptionLabel}</option>
+                {versionOptions.map((v) => (
+                  <option key={v.version_number} value={`v${v.version_number}`}>
+                    v{v.version_number} — {new Date(v.published_at).toLocaleDateString()}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Historical version banner */}
+        {(isViewingHistorical || isViewingPublishedAsAuthorWithDraft) && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span className="shrink-0 mt-0.5">📌</span>
+            <div>
+              {isViewingHistorical ? (
+                <p>
+                  You're viewing version {selectedSnapshot!.version_number} — this is not the
+                  latest published version.{' '}
+                  <button
+                    onClick={() => handleVersionSelect('current')}
+                    className="underline font-medium"
+                  >
+                    View latest
+                  </button>
+                </p>
+              ) : (
+                <p>
+                  You're viewing the published version {selectedSnapshot!.version_number}. You have
+                  an unpublished draft with newer changes.{' '}
+                  <button
+                    onClick={() => handleVersionSelect('current')}
+                    className="underline font-medium"
+                  >
+                    View draft
+                  </button>
+                </p>
+              )}
+              {selectedSnapshot?.changelog && (
+                <p className="mt-1 text-xs text-amber-700 italic">
+                  Changelog: {selectedSnapshot.changelog}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Stats row */}
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted">
           <span>{design.execution_count} run{design.execution_count !== 1 ? 's' : ''}</span>
           <span>{design.derived_design_count} fork{design.derived_design_count !== 1 ? 's' : ''}</span>
-          <span>v{design.version}</span>
-          {design.fork_metadata && (
+          {design.published_version > 0 && (
+            <span style={{ fontFamily: 'var(--font-mono)' }}>
+              v{design.published_version}
+              {design.has_draft_changes && isAuthor ? ' + draft' : ''}
+            </span>
+          )}
+          {viewedDesign.fork_metadata && (
             <span>
               Forked from{' '}
               <Link
-                to={`/designs/${design.fork_metadata.parent_design_id}`}
+                to={`/designs/${viewedDesign.fork_metadata.parent_design_id}`}
                 className="text-primary hover:underline"
               >
                 parent
               </Link>
-              {' '}({design.fork_metadata.fork_type})
+              {' '}({viewedDesign.fork_metadata.fork_type})
             </span>
           )}
-          <span>Updated {new Date(design.updated_at).toLocaleDateString()}</span>
+          <span>Updated {new Date(viewedDesign.updated_at).toLocaleDateString()}</span>
         </div>
       </header>
 
@@ -248,345 +395,359 @@ export default function DesignDetail() {
         </p>
       )}
 
+      {snapshotLoading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+
       {/* ── Two-column layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      {!snapshotLoading && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
-        {/* ────────── Main content (left, 2/3) ────────── */}
-        <div className="lg:col-span-2 space-y-5">
+          {/* ────────── Main content (left, 2/3) ────────── */}
+          <div className="lg:col-span-2 space-y-5">
 
-          {/* Overview (summary + optional hypothesis) */}
-          {(design.summary || design.hypothesis) && (
-            <section className="card p-6">
-              <SectionLabel>Overview</SectionLabel>
-              {design.summary && (
-                <p className="text-gray-800 leading-relaxed">{design.summary}</p>
-              )}
-              {design.hypothesis && (
-                <>
-                  <p className="text-xs font-semibold text-muted mt-4 mb-1">Hypothesis</p>
-                  <p className="text-gray-800 leading-relaxed">{design.hypothesis}</p>
-                </>
-              )}
-            </section>
-          )}
+            {/* Overview */}
+            {(viewedDesign.summary || viewedDesign.hypothesis) && (
+              <section className="card p-6">
+                <SectionLabel>Overview</SectionLabel>
+                {viewedDesign.summary && (
+                  <p className="text-gray-800 leading-relaxed">{viewedDesign.summary}</p>
+                )}
+                {viewedDesign.hypothesis && (
+                  <>
+                    <p className="text-xs font-semibold text-muted mt-4 mb-1">Hypothesis</p>
+                    <p className="text-gray-800 leading-relaxed">{viewedDesign.hypothesis}</p>
+                  </>
+                )}
+              </section>
+            )}
 
-          {/* Materials */}
-          {design.materials.length > 0 && (
-            <section className="card p-6">
-              <SectionLabel>Materials</SectionLabel>
-              <ul className="space-y-3">
-                {design.materials.map((m) => {
-                  const mat = materialMap[m.material_id]
-                  return (
-                    <li key={m.material_id}>
-                      {mat ? (
-                        <MaterialCard
-                          material={mat}
-                          onDetails={setSelectedMaterial}
-                        />
-                      ) : (
-                        <div className="rounded-xl border-2 border-surface-2 px-4 py-3">
-                          <p className="text-sm font-mono text-muted">{m.material_id}</p>
+            {/* Materials */}
+            {viewedDesign.materials.length > 0 && (
+              <section className="card p-6">
+                <SectionLabel>Materials</SectionLabel>
+                <ul className="space-y-3">
+                  {viewedDesign.materials.map((m) => {
+                    const mat = materialMap[m.material_id]
+                    return (
+                      <li key={m.material_id}>
+                        {mat ? (
+                          <MaterialCard
+                            material={mat}
+                            onDetails={setSelectedMaterial}
+                          />
+                        ) : (
+                          <div className="rounded-xl border-2 border-surface-2 px-4 py-3">
+                            <p className="text-sm font-mono text-muted">{m.material_id}</p>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 mt-1.5 pl-1">
+                          <span className="text-xs text-gray-700">{m.quantity}</span>
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              m.criticality === 'required'
+                                ? 'bg-red-50 text-red-600'
+                                : m.criticality === 'recommended'
+                                ? 'bg-yellow-50 text-yellow-700'
+                                : 'bg-surface-2 text-muted'
+                            }`}
+                          >
+                            {m.criticality}
+                          </span>
                         </div>
-                      )}
-                      <div className="flex items-center gap-2 mt-1.5 pl-1">
-                        <span className="text-xs text-gray-700">{m.quantity}</span>
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full ${
-                            m.criticality === 'required'
-                              ? 'bg-red-50 text-red-600'
-                              : m.criticality === 'recommended'
-                              ? 'bg-yellow-50 text-yellow-700'
-                              : 'bg-surface-2 text-muted'
-                          }`}
-                        >
-                          {m.criticality}
-                        </span>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            </section>
-          )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            )}
 
-          {/* Procedure */}
-          {design.steps.length > 0 && (
-            <section className="card p-6">
-              <SectionLabel>Procedure</SectionLabel>
-              <ol className="space-y-5">
-                {design.steps.map((step) => (
-                  <li key={step.step_number} className="flex gap-4">
-                    <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center mt-0.5">
-                      {step.step_number}
-                    </span>
-                    <div className="flex-1 min-w-0 pt-0.5">
-                      <p className="text-gray-800 text-sm leading-relaxed">{step.instruction}</p>
-                      {(step.duration_minutes || step.safety_notes) && (
-                        <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted">
-                          {step.duration_minutes && (
-                            <span>{step.duration_minutes} min</span>
-                          )}
-                          {step.safety_notes && (
-                            <span className="text-amber-600">⚠ {step.safety_notes}</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
-
-          {/* Research Questions */}
-          {design.research_questions.length > 0 && (
-            <section className="card p-6">
-              <SectionLabel>Research Questions & Outcomes</SectionLabel>
-              <ul className="space-y-4">
-                {design.research_questions.map((q, i) => (
-                  <li key={q.id} className="flex gap-3">
-                    <span className="shrink-0 text-xs font-bold text-muted mt-0.5 w-4">{i + 1}.</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-800 text-sm leading-relaxed">{q.question}</p>
-                      <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-muted">
-                        <span className="bg-surface-2 px-2 py-0.5 rounded-full">
-                          {q.expected_data_type}
-                        </span>
-                        {q.measurement_unit && <span>{q.measurement_unit}</span>}
-                        {q.success_criteria && (
-                          <span className="italic">Goal: {q.success_criteria}</span>
+            {/* Procedure */}
+            {viewedDesign.steps.length > 0 && (
+              <section className="card p-6">
+                <SectionLabel>Procedure</SectionLabel>
+                <ol className="space-y-5">
+                  {viewedDesign.steps.map((step) => (
+                    <li key={step.step_number} className="flex gap-4">
+                      <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center mt-0.5">
+                        {step.step_number}
+                      </span>
+                      <div className="flex-1 min-w-0 pt-0.5">
+                        <p className="text-gray-800 text-sm leading-relaxed">{step.instruction}</p>
+                        {(step.duration_minutes || step.safety_notes) && (
+                          <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted">
+                            {step.duration_minutes && (
+                              <span>{step.duration_minutes} min</span>
+                            )}
+                            {step.safety_notes && (
+                              <span className="text-amber-600">⚠ {step.safety_notes}</span>
+                            )}
+                          </div>
                         )}
                       </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
 
-          {/* Variables */}
-          {hasVariables && (
-            <section className="card p-6">
-              <SectionLabel>Variables</SectionLabel>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                  { label: 'Independent', vars: design.independent_variables ?? [], border: 'border-blue-200',   bg: 'bg-blue-50' },
-                  { label: 'Dependent',   vars: design.dependent_variables   ?? [], border: 'border-green-200',  bg: 'bg-green-50' },
-                  { label: 'Controlled',  vars: design.controlled_variables  ?? [], border: 'border-surface-2',  bg: 'bg-surface' },
-                ].map(({ label, vars, border, bg }) =>
-                  vars.length > 0 ? (
-                    <div key={label} className={`rounded-xl border ${border} ${bg} p-4`}>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted mb-3">
-                        {label}
+            {/* Research Questions */}
+            {viewedDesign.research_questions.length > 0 && (
+              <section className="card p-6">
+                <SectionLabel>Research Questions & Outcomes</SectionLabel>
+                <ul className="space-y-4">
+                  {viewedDesign.research_questions.map((q, i) => (
+                    <li key={q.id} className="flex gap-3">
+                      <span className="shrink-0 text-xs font-bold text-muted mt-0.5 w-4">{i + 1}.</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-800 text-sm leading-relaxed">{q.question}</p>
+                        <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-muted">
+                          <span className="bg-surface-2 px-2 py-0.5 rounded-full">
+                            {q.expected_data_type}
+                          </span>
+                          {q.measurement_unit && <span>{q.measurement_unit}</span>}
+                          {q.success_criteria && (
+                            <span className="italic">Goal: {q.success_criteria}</span>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* Variables */}
+            {hasVariables && (
+              <section className="card p-6">
+                <SectionLabel>Variables</SectionLabel>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[
+                    { label: 'Independent', vars: viewedDesign.independent_variables ?? [], border: 'border-blue-200',   bg: 'bg-blue-50' },
+                    { label: 'Dependent',   vars: viewedDesign.dependent_variables   ?? [], border: 'border-green-200',  bg: 'bg-green-50' },
+                    { label: 'Controlled',  vars: viewedDesign.controlled_variables  ?? [], border: 'border-surface-2',  bg: 'bg-surface' },
+                  ].map(({ label, vars, border, bg }) =>
+                    vars.length > 0 ? (
+                      <div key={label} className={`rounded-xl border ${border} ${bg} p-4`}>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted mb-3">
+                          {label}
+                        </p>
+                        <ul className="space-y-3">
+                          {vars.map((v, i) => (
+                            <li key={i}>
+                              <p className="text-sm font-medium text-ink">{v.name}</p>
+                              <p className="text-xs text-muted mt-0.5">
+                                {v.type} · {v.values_or_range}
+                                {v.units ? ` (${v.units})` : ''}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null
+                  )}
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* ────────── Sidebar (right, 1/3) ────────── */}
+          <div className="space-y-5 lg:sticky lg:top-6">
+
+            {/* About */}
+            <div className="card p-5">
+              <SectionLabel>About</SectionLabel>
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted mb-1">Difficulty</dt>
+                  <dd>
+                    <span
+                      className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${DIFFICULTY_COLORS[viewedDesign.difficulty_level] ?? 'bg-gray-100 text-gray-600'}`}
+                    >
+                      {viewedDesign.difficulty_level}
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted mb-1">Status</dt>
+                  <dd className="text-ink capitalize">{design.status}</dd>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <dt className="text-xs text-muted mb-1">Runs</dt>
+                    <dd className="text-ink font-medium">{design.execution_count}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted mb-1">Forks</dt>
+                    <dd className="text-ink font-medium">{design.derived_design_count}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted mb-1">Version</dt>
+                    <dd className="text-ink font-medium" style={{ fontFamily: 'var(--font-mono)' }}>
+                      {design.published_version > 0 ? `v${design.published_version}` : '—'}
+                    </dd>
+                  </div>
+                </div>
+                {viewedDesign.fork_metadata && (
+                  <div>
+                    <dt className="text-xs text-muted mb-1">Forked from</dt>
+                    <dd>
+                      <Link
+                        to={`/designs/${viewedDesign.fork_metadata.parent_design_id}`}
+                        className="text-primary hover:underline"
+                      >
+                        Parent design
+                      </Link>
+                      <span className="text-muted text-xs ml-1">({viewedDesign.fork_metadata.fork_type})</span>
+                    </dd>
+                  </div>
+                )}
+                {viewedDesign.seeking_collaborators && (
+                  <div>
+                    <span className="inline-block text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
+                      Seeking collaborators
+                    </span>
+                    {viewedDesign.collaboration_notes && (
+                      <p className="mt-2 text-xs text-muted leading-relaxed">
+                        {viewedDesign.collaboration_notes}
                       </p>
-                      <ul className="space-y-3">
-                        {vars.map((v, i) => (
-                          <li key={i}>
-                            <p className="text-sm font-medium text-ink">{v.name}</p>
-                            <p className="text-xs text-muted mt-0.5">
-                              {v.type} · {v.values_or_range}
-                              {v.units ? ` (${v.units})` : ''}
-                            </p>
+                    )}
+                  </div>
+                )}
+              </dl>
+            </div>
+
+            {/* Actions */}
+            <div className="card p-5">
+              <SectionLabel>Actions</SectionLabel>
+
+              {/* Community actions */}
+              <div className="space-y-2">
+                <button className="w-full btn-primary text-sm justify-center" disabled>
+                  Run Experiment
+                </button>
+                <button className="w-full btn-secondary text-sm justify-center" disabled>
+                  Add to My Lab
+                </button>
+                <button className="w-full btn-secondary text-sm justify-center" disabled>
+                  Review Experiment
+                </button>
+                {(canFork || design.status === 'published') && (
+                  <button
+                    onClick={canFork ? () => setShowForkModal(true) : undefined}
+                    disabled={!canFork}
+                    className="w-full btn-secondary text-sm justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Fork
+                  </button>
+                )}
+              </div>
+
+              {/* Owner-only actions — only shown when viewing the current state */}
+              {isAuthor && (
+                <>
+                  <div className="my-4 border-t border-surface-2" />
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-3">
+                    Owner
+                  </p>
+                  <div className="space-y-2">
+                    {canEdit && (
+                      <Link
+                        to={`/designs/${id}/edit`}
+                        className="block w-full btn-secondary text-sm text-center justify-center"
+                      >
+                        Edit
+                      </Link>
+                    )}
+                    {canPublish && (
+                      <button
+                        onClick={handlePublish}
+                        disabled={publishing}
+                        className="w-full btn-primary text-sm justify-center disabled:opacity-50"
+                      >
+                        {publishing
+                          ? 'Publishing…'
+                          : design.has_draft_changes
+                          ? 'Publish draft'
+                          : 'Publish'}
+                      </button>
+                    )}
+                    <button className="w-full btn-secondary text-sm justify-center" disabled>
+                      View Reviews
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Additional details */}
+            {hasSidebarDetails && (
+              <div className="card p-5">
+                <SectionLabel>Additional Details</SectionLabel>
+                <div className="space-y-4 text-sm">
+                  {viewedDesign.safety_considerations && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted mb-1">Safety</p>
+                      <p className="text-gray-800 whitespace-pre-line leading-relaxed">
+                        {viewedDesign.safety_considerations}
+                      </p>
+                    </div>
+                  )}
+                  {viewedDesign.sample_size != null && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted mb-1">Sample Size</p>
+                      <p className="text-gray-800">{viewedDesign.sample_size}</p>
+                    </div>
+                  )}
+                  {viewedDesign.analysis_plan && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted mb-1">Analysis Plan</p>
+                      <p className="text-gray-800 whitespace-pre-line leading-relaxed">
+                        {viewedDesign.analysis_plan}
+                      </p>
+                    </div>
+                  )}
+                  {viewedDesign.ethical_considerations && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted mb-1">Ethical Considerations</p>
+                      <p className="text-gray-800 whitespace-pre-line leading-relaxed">
+                        {viewedDesign.ethical_considerations}
+                      </p>
+                    </div>
+                  )}
+                  {viewedDesign.disclaimers && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted mb-1">Disclaimers</p>
+                      <p className="text-gray-800 whitespace-pre-line leading-relaxed">
+                        {viewedDesign.disclaimers}
+                      </p>
+                    </div>
+                  )}
+                  {(viewedDesign.reference_experiment_ids?.length ?? 0) > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted mb-1">Reference Experiments</p>
+                      <ul className="space-y-1">
+                        {viewedDesign.reference_experiment_ids.map((refId) => (
+                          <li key={refId}>
+                            <Link
+                              to={`/designs/${refId}`}
+                              className="text-primary hover:underline text-sm"
+                            >
+                              {refTitleMap[refId] ?? refId}
+                            </Link>
                           </li>
                         ))}
                       </ul>
                     </div>
-                  ) : null
-                )}
-              </div>
-            </section>
-          )}
-        </div>
-
-        {/* ────────── Sidebar (right, 1/3) ────────── */}
-        <div className="space-y-5 lg:sticky lg:top-6">
-
-          {/* About */}
-          <div className="card p-5">
-            <SectionLabel>About</SectionLabel>
-            <dl className="space-y-3 text-sm">
-              <div>
-                <dt className="text-xs text-muted mb-1">Difficulty</dt>
-                <dd>
-                  <span
-                    className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${DIFFICULTY_COLORS[design.difficulty_level] ?? 'bg-gray-100 text-gray-600'}`}
-                  >
-                    {design.difficulty_level}
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted mb-1">Status</dt>
-                <dd className="text-ink capitalize">{design.status}</dd>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <dt className="text-xs text-muted mb-1">Runs</dt>
-                  <dd className="text-ink font-medium">{design.execution_count}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted mb-1">Forks</dt>
-                  <dd className="text-ink font-medium">{design.derived_design_count}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted mb-1">Version</dt>
-                  <dd className="text-ink font-medium">{design.version}</dd>
-                </div>
-              </div>
-              {design.fork_metadata && (
-                <div>
-                  <dt className="text-xs text-muted mb-1">Forked from</dt>
-                  <dd>
-                    <Link
-                      to={`/designs/${design.fork_metadata.parent_design_id}`}
-                      className="text-primary hover:underline"
-                    >
-                      Parent design
-                    </Link>
-                    <span className="text-muted text-xs ml-1">({design.fork_metadata.fork_type})</span>
-                  </dd>
-                </div>
-              )}
-              {design.seeking_collaborators && (
-                <div>
-                  <span className="inline-block text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
-                    Seeking collaborators
-                  </span>
-                  {design.collaboration_notes && (
-                    <p className="mt-2 text-xs text-muted leading-relaxed">
-                      {design.collaboration_notes}
-                    </p>
                   )}
                 </div>
-              )}
-            </dl>
-          </div>
-
-          {/* Actions */}
-          <div className="card p-5">
-            <SectionLabel>Actions</SectionLabel>
-
-            {/* Community actions */}
-            <div className="space-y-2">
-              <button className="w-full btn-primary text-sm justify-center" disabled>
-                Run Experiment
-              </button>
-              <button className="w-full btn-secondary text-sm justify-center" disabled>
-                Add to My Lab
-              </button>
-              <button className="w-full btn-secondary text-sm justify-center" disabled>
-                Review Experiment
-              </button>
-              {(canFork || design.status === 'published') && (
-                <button
-                  onClick={canFork ? () => setShowForkModal(true) : undefined}
-                  disabled={!canFork}
-                  className="w-full btn-secondary text-sm justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Fork
-                </button>
-              )}
-            </div>
-
-            {/* Owner-only actions */}
-            {isAuthor && (
-              <>
-                <div className="my-4 border-t border-surface-2" />
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-3">
-                  Owner
-                </p>
-                <div className="space-y-2">
-                  {canEdit && (
-                    <Link
-                      to={`/designs/${id}/edit`}
-                      className="block w-full btn-secondary text-sm text-center justify-center"
-                    >
-                      Edit
-                    </Link>
-                  )}
-                  {canPublish && (
-                    <button
-                      onClick={handlePublish}
-                      disabled={publishing}
-                      className="w-full btn-primary text-sm justify-center disabled:opacity-50"
-                    >
-                      {publishing ? 'Publishing…' : 'Publish'}
-                    </button>
-                  )}
-                  <button className="w-full btn-secondary text-sm justify-center" disabled>
-                    View Reviews
-                  </button>
-                </div>
-              </>
+              </div>
             )}
           </div>
-
-          {/* Additional details */}
-          {hasSidebarDetails && (
-            <div className="card p-5">
-              <SectionLabel>Additional Details</SectionLabel>
-              <div className="space-y-4 text-sm">
-                {design.safety_considerations && (
-                  <div>
-                    <p className="text-xs font-semibold text-muted mb-1">Safety</p>
-                    <p className="text-gray-800 whitespace-pre-line leading-relaxed">
-                      {design.safety_considerations}
-                    </p>
-                  </div>
-                )}
-                {design.sample_size != null && (
-                  <div>
-                    <p className="text-xs font-semibold text-muted mb-1">Sample Size</p>
-                    <p className="text-gray-800">{design.sample_size}</p>
-                  </div>
-                )}
-                {design.analysis_plan && (
-                  <div>
-                    <p className="text-xs font-semibold text-muted mb-1">Analysis Plan</p>
-                    <p className="text-gray-800 whitespace-pre-line leading-relaxed">
-                      {design.analysis_plan}
-                    </p>
-                  </div>
-                )}
-                {design.ethical_considerations && (
-                  <div>
-                    <p className="text-xs font-semibold text-muted mb-1">Ethical Considerations</p>
-                    <p className="text-gray-800 whitespace-pre-line leading-relaxed">
-                      {design.ethical_considerations}
-                    </p>
-                  </div>
-                )}
-                {design.disclaimers && (
-                  <div>
-                    <p className="text-xs font-semibold text-muted mb-1">Disclaimers</p>
-                    <p className="text-gray-800 whitespace-pre-line leading-relaxed">
-                      {design.disclaimers}
-                    </p>
-                  </div>
-                )}
-                {(design.reference_experiment_ids?.length ?? 0) > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-muted mb-1">Reference Experiments</p>
-                    <ul className="space-y-1">
-                      {design.reference_experiment_ids.map((refId) => (
-                        <li key={refId}>
-                          <Link
-                            to={`/designs/${refId}`}
-                            className="text-primary hover:underline text-sm"
-                          >
-                            {refTitleMap[refId] ?? refId}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
-      </div>
+      )}
 
       {/* ── Fork modal ── */}
       {showForkModal && (

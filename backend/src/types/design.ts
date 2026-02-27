@@ -126,7 +126,9 @@ export interface Design {
   // Metadata (system-managed)
   status: DesignStatus
   is_public: boolean           // true when status is 'published' or 'locked'
-  version: number
+  version: number              // internal edit counter, increments on every PATCH
+  published_version: number    // user-facing version number, increments on each publish (0 = never published)
+  has_draft_changes: boolean   // true when a published design has unsaved edits in its draft sub-document
   author_ids: string[]
   review_status: ReviewStatus
   review_count: number
@@ -177,6 +179,25 @@ export type UpdateDesignBody = Partial<CreateDesignBody>
 export interface ForkDesignBody {
   fork_type: ForkType
   fork_rationale: string
+}
+
+export interface PublishDesignBody {
+  changelog?: string
+}
+
+// ─── Version history types ────────────────────────────────────────────────────
+
+// Summary returned by GET /api/designs/:id/versions
+export interface DesignVersionSummary {
+  version_number: number
+  published_at: string   // ISO string
+  published_by: string   // uid
+  changelog?: string
+}
+
+// Full snapshot returned by GET /api/designs/:id/versions/:versionNum
+export interface DesignVersionSnapshot extends DesignVersionSummary {
+  data: DesignResponse
 }
 
 // ─── API response types ───────────────────────────────────────────────────────

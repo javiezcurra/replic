@@ -9,8 +9,11 @@ import {
   CreateDesignBody,
   UpdateDesignBody,
   ForkDesignBody,
+  PublishDesignBody,
   DifficultyLevel,
   ResearchQuestion,
+  DesignVersionSummary,
+  DesignVersionSnapshot,
 } from '../types/design'
 
 const DESIGNS = 'designs'
@@ -81,6 +84,35 @@ function validateCreate(body: CreateDesignBody): string | null {
   return null
 }
 
+// Merges draft sub-document content with system-managed fields from the main document.
+// The main document is always the authoritative source for status, published_version, etc.
+function mergeDraftWithMain(draftData: Design, main: Design): Design {
+  return {
+    ...draftData,
+    id: main.id,
+    status: main.status,
+    is_public: main.is_public,
+    published_version: main.published_version,
+    has_draft_changes: main.has_draft_changes,
+    author_ids: main.author_ids,
+    review_status: main.review_status,
+    review_count: main.review_count,
+    execution_count: main.execution_count,
+    scientific_value_points: main.scientific_value_points,
+    derived_design_count: main.derived_design_count,
+    fork_metadata: main.fork_metadata,
+    created_at: main.created_at,
+  }
+}
+
+function draftRef(designId: string) {
+  return adminDb.collection(DESIGNS).doc(designId).collection('draft').doc('current')
+}
+
+function versionsRef(designId: string) {
+  return adminDb.collection(DESIGNS).doc(designId).collection('versions')
+}
+
 // ─── POST /api/designs ────────────────────────────────────────────────────────
 export async function createDesign(
   req: Request,
@@ -92,7 +124,6 @@ export async function createDesign(
     const validationError = validateCreate(body)
     if (validationError) return next(badRequest(validationError))
 
-    // Ensure research questions each have a stable ID
     const research_questions: ResearchQuestion[] = body.research_questions.map((q) => ({
       ...q,
       id: q.id ?? randomUUID(),
@@ -133,6 +164,8 @@ export async function createDesign(
       status: 'draft',
       is_public: false,
       version: 1,
+      published_version: 0,
+      has_draft_changes: false,
       author_ids: [req.user!.uid],
       review_status: 'unreviewed',
       review_count: 0,
@@ -152,7 +185,6 @@ export async function createDesign(
 }
 
 // ─── GET /api/designs ─────────────────────────────────────────────────────────
-// Lists published + locked designs. Supports ?discipline=&difficulty=&limit=&after=
 export async function listDesigns(
   req: Request,
   res: Response,
@@ -162,9 +194,6 @@ export async function listDesigns(
     const { discipline, difficulty, limit: limitParam, after } = req.query
     const limit = Math.min(parseInt(limitParam as string) || 20, 100)
 
-    // Use is_public (equality) as the base filter so it can be combined with
-    // array-contains (discipline_tags). Firestore prohibits 'in' + 'array-contains'
-    // in the same query.
     let query = adminDb
       .collection(DESIGNS)
       .where('is_public', '==', true)
@@ -183,6 +212,7 @@ export async function listDesigns(
     }
 
     const snap = await query.get()
+    // The main document always reflects the last published state, so no draft-awareness needed here.
     const data = snap.docs.map((d) => toResponse(d.data() as Design))
     res.status(200).json({ status: 'ok', data, count: data.length })
   } catch (err) {
@@ -191,7 +221,6 @@ export async function listDesigns(
 }
 
 // ─── GET /api/designs/mine ────────────────────────────────────────────────────
-// Lists the authenticated user's own designs (all statuses)
 export async function listMyDesigns(
   req: Request,
   res: Response,
@@ -230,6 +259,16 @@ export async function getDesign(
       }
     }
 
+    // For published designs with unsaved draft changes, return the draft content to authors.
+    // Non-authors always see the main document (last published state).
+    if (design.has_draft_changes && req.user && design.author_ids.includes(req.user.uid)) {
+      const draftSnap = await draftRef(req.params.id).get()
+      if (draftSnap.exists) {
+        const merged = mergeDraftWithMain(draftSnap.data() as Design, design)
+        void res.status(200).json({ status: 'ok', data: toResponse(merged) })
+      }
+    }
+
     res.status(200).json({ status: 'ok', data: toResponse(design) })
   } catch (err) {
     next(err)
@@ -264,7 +303,6 @@ export async function updateDesign(
       }
     }
 
-    // Validate title length if provided
     if (body.title !== undefined) {
       if (!body.title.trim()) return next(badRequest('title cannot be empty'))
       if (body.title.length > 200) return next(badRequest('title must be 200 characters or fewer'))
@@ -276,7 +314,6 @@ export async function updateDesign(
       return next(badRequest(`difficulty_level must be one of: ${DIFFICULTY_LEVELS.join(', ')}`))
     }
 
-    // Re-stamp question IDs if research_questions are being updated
     if (body.research_questions) {
       body.research_questions = body.research_questions.map((q) => ({
         ...q,
@@ -284,15 +321,57 @@ export async function updateDesign(
       }))
     }
 
-    const patch: Record<string, unknown> = {
-      ...body,
-      version: design.version + 1,
-      updated_at: FieldValue.serverTimestamp(),
+    // Pure drafts (never published): update the main document directly.
+    if (design.status === 'draft') {
+      const patch: Record<string, unknown> = {
+        ...body,
+        version: design.version + 1,
+        updated_at: FieldValue.serverTimestamp(),
+      }
+      await ref.update(patch)
+      const updated = await ref.get()
+      void res.status(200).json({ status: 'ok', data: toResponse(updated.data() as Design) })
     }
 
-    await ref.update(patch)
-    const updated = await ref.get()
-    res.status(200).json({ status: 'ok', data: toResponse(updated.data() as Design) })
+    // Published / locked designs: write edits to the draft sub-document so the
+    // main document (= last published state) stays untouched for public readers.
+    const dr = draftRef(req.params.id)
+
+    if (!design.has_draft_changes) {
+      // First edit after publish: seed the draft from the current main document.
+      await dr.set({
+        ...design,
+        ...body,
+        version: design.version + 1,
+        updated_at: FieldValue.serverTimestamp(),
+      })
+      await ref.update({
+        has_draft_changes: true,
+        version: design.version + 1,
+        updated_at: FieldValue.serverTimestamp(),
+      })
+    } else {
+      // Subsequent edit: update the existing draft document.
+      const draftSnap = await dr.get()
+      const currentDraft = draftSnap.data() as Design
+      await dr.set({
+        ...currentDraft,
+        ...body,
+        version: currentDraft.version + 1,
+        updated_at: FieldValue.serverTimestamp(),
+      })
+      await ref.update({
+        version: currentDraft.version + 1,
+        updated_at: FieldValue.serverTimestamp(),
+      })
+    }
+
+    const [updatedDraftSnap, updatedMainSnap] = await Promise.all([dr.get(), ref.get()])
+    const merged = mergeDraftWithMain(
+      updatedDraftSnap.data() as Design,
+      updatedMainSnap.data() as Design,
+    )
+    void res.status(200).json({ status: 'ok', data: toResponse(merged) })
   } catch (err) {
     next(err)
   }
@@ -311,15 +390,167 @@ export async function publishDesign(
 
     const design = snap.data() as Design
     if (!design.author_ids.includes(req.user!.uid)) return next(forbidden('Not an author'))
-    if (design.status !== 'draft') return next(badRequest('Only drafts can be published'))
 
-    // Full validation before publishing
-    const validationError = validateCreate(design as unknown as CreateDesignBody)
-    if (validationError) return next(badRequest(`Cannot publish: ${validationError}`))
+    const { changelog } = (req.body ?? {}) as PublishDesignBody
+    const now = FieldValue.serverTimestamp()
 
-    await ref.update({ status: 'published', is_public: true, updated_at: FieldValue.serverTimestamp() })
-    const updated = await ref.get()
-    res.status(200).json({ status: 'ok', data: toResponse(updated.data() as Design) })
+    if (design.status === 'draft') {
+      // ── First publish ──────────────────────────────────────────────────────
+      const validationError = validateCreate(design as unknown as CreateDesignBody)
+      if (validationError) return next(badRequest(`Cannot publish: ${validationError}`))
+
+      const newPublishedVersion = 1
+      await ref.update({
+        status: 'published',
+        is_public: true,
+        published_version: newPublishedVersion,
+        has_draft_changes: false,
+        updated_at: now,
+      })
+
+      const published = (await ref.get()).data() as Design
+      const snapshot: Record<string, unknown> = {
+        version_number: newPublishedVersion,
+        published_at: now,
+        published_by: req.user!.uid,
+        data: toResponse(published),
+      }
+      if (changelog?.trim()) snapshot.changelog = changelog.trim()
+      await versionsRef(req.params.id).doc(String(newPublishedVersion)).set(snapshot)
+
+      void res.status(200).json({ status: 'ok', data: toResponse(published) })
+    }
+
+    if (design.status === 'published' || design.status === 'locked') {
+      // ── Re-publish from draft ─────────────────────────────────────────────
+      if (!design.has_draft_changes) {
+        return next(badRequest('No unpublished changes to publish'))
+      }
+
+      const dr = draftRef(req.params.id)
+      const draftSnap = await dr.get()
+      if (!draftSnap.exists) {
+        return next(badRequest('Draft document not found — data may be inconsistent'))
+      }
+
+      const draftData = draftSnap.data() as Design
+      const validationError = validateCreate(draftData as unknown as CreateDesignBody)
+      if (validationError) return next(badRequest(`Cannot publish: ${validationError}`))
+
+      const newPublishedVersion = design.published_version + 1
+      const updatedMain = {
+        ...draftData,
+        id: design.id,
+        status: design.status,
+        is_public: design.is_public,
+        author_ids: design.author_ids,
+        review_status: design.review_status,
+        review_count: design.review_count,
+        execution_count: design.execution_count,
+        scientific_value_points: design.scientific_value_points,
+        derived_design_count: design.derived_design_count,
+        fork_metadata: design.fork_metadata,
+        created_at: design.created_at,
+        published_version: newPublishedVersion,
+        has_draft_changes: false,
+        updated_at: now,
+      }
+
+      await ref.set(updatedMain)
+      await dr.delete()
+
+      const published = (await ref.get()).data() as Design
+      const snapshot: Record<string, unknown> = {
+        version_number: newPublishedVersion,
+        published_at: now,
+        published_by: req.user!.uid,
+        data: toResponse(published),
+      }
+      if (changelog?.trim()) snapshot.changelog = changelog.trim()
+      await versionsRef(req.params.id).doc(String(newPublishedVersion)).set(snapshot)
+
+      void res.status(200).json({ status: 'ok', data: toResponse(published) })
+    }
+
+    return next(badRequest('Design cannot be published in its current state'))
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ─── GET /api/designs/:id/versions ───────────────────────────────────────────
+export async function listDesignVersions(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const mainSnap = await adminDb.collection(DESIGNS).doc(req.params.id).get()
+    if (!mainSnap.exists) return next(notFound())
+
+    const design = mainSnap.data() as Design
+
+    // Same visibility rules as getDesign
+    if (design.status === 'draft') {
+      if (!req.user || !design.author_ids.includes(req.user.uid)) {
+        return next(notFound())
+      }
+    }
+
+    const versionsSnap = await versionsRef(req.params.id)
+      .orderBy('version_number', 'desc')
+      .get()
+
+    const data: DesignVersionSummary[] = versionsSnap.docs.map((d) => {
+      const v = d.data()
+      return {
+        version_number: v.version_number,
+        published_at: v.published_at.toDate().toISOString(),
+        published_by: v.published_by,
+        ...(v.changelog ? { changelog: v.changelog } : {}),
+      }
+    })
+
+    res.status(200).json({ status: 'ok', data })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ─── GET /api/designs/:id/versions/:versionNum ───────────────────────────────
+export async function getDesignVersion(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const mainSnap = await adminDb.collection(DESIGNS).doc(req.params.id).get()
+    if (!mainSnap.exists) return next(notFound())
+
+    const design = mainSnap.data() as Design
+
+    if (design.status === 'draft') {
+      if (!req.user || !design.author_ids.includes(req.user.uid)) {
+        return next(notFound())
+      }
+    }
+
+    const versionSnap = await versionsRef(req.params.id)
+      .doc(req.params.versionNum)
+      .get()
+
+    if (!versionSnap.exists) return next(notFound('Version not found'))
+
+    const v = versionSnap.data()!
+    const result: DesignVersionSnapshot = {
+      version_number: v.version_number,
+      published_at: v.published_at.toDate().toISOString(),
+      published_by: v.published_by,
+      ...(v.changelog ? { changelog: v.changelog } : {}),
+      data: v.data as DesignResponse,
+    }
+
+    res.status(200).json({ status: 'ok', data: result })
   } catch (err) {
     next(err)
   }
@@ -356,6 +587,8 @@ export async function forkDesign(
       status: 'draft',
       is_public: false,
       version: 1,
+      published_version: 0,
+      has_draft_changes: false,
       author_ids: [req.user!.uid],
       review_status: 'unreviewed',
       review_count: 0,
@@ -374,7 +607,6 @@ export async function forkDesign(
 
     await docRef.set(forked)
 
-    // Increment derived_design_count on the source
     await adminDb
       .collection(DESIGNS)
       .doc(source.id)
