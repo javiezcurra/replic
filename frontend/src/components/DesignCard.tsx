@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { Design, DesignStatus } from '../types/design'
+import UserDisplayName from './UserDisplayName'
 
 const STATUS_LABELS: Record<DesignStatus, string> = {
   draft: 'Draft',
@@ -29,10 +30,17 @@ interface Props {
 
 export default function DesignCard({ design }: Props) {
   return (
-    <Link
-      to={`/designs/${design.id}`}
-      className="block card p-5 hover:shadow-md transition-shadow"
-    >
+    // Stretched-link pattern: the Link covers the full card; interactive children
+    // use relative + z-10 to sit above the overlay and receive their own clicks.
+    <div className="card p-5 hover:shadow-md transition-shadow relative">
+      {/* Full-card navigation link */}
+      <Link
+        to={`/designs/${design.id}`}
+        className="absolute inset-0 rounded-2xl"
+        aria-label={design.title}
+      />
+
+      {/* Content */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-ink leading-snug">{design.title}</h3>
@@ -62,9 +70,22 @@ export default function DesignCard({ design }: Props) {
         ))}
       </div>
 
-      <p className="mt-3 text-xs text-muted">
+      {/* Authors — rendered above the stretched link via relative + z-10 */}
+      {design.author_ids.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-1 text-xs text-muted relative z-10">
+          <span>by</span>
+          {design.author_ids.map((uid, i) => (
+            <span key={uid} className="flex items-center gap-1">
+              <UserDisplayName uid={uid} className="text-xs" />
+              {i < design.author_ids.length - 1 && <span>,</span>}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <p className="mt-2 text-xs text-muted">
         Updated {new Date(design.updated_at).toLocaleDateString()}
       </p>
-    </Link>
+    </div>
   )
 }

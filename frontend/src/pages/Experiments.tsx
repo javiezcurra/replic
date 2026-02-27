@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { Design, DifficultyLevel, DesignListResponse } from '../types/design'
+import UserDisplayName from '../components/UserDisplayName'
 
 const DIFFICULTY_OPTIONS: DifficultyLevel[] = [
   'Pre-K', 'Elementary', 'Middle School', 'High School',
@@ -126,32 +127,54 @@ export default function Experiments() {
 
 function DesignCard({ design }: { design: Design }) {
   return (
-    <Link
-      to={`/designs/${design.id}`}
-      className="block card p-5 hover:shadow-md transition-shadow"
-    >
+    // Stretched-link pattern: Link covers the full card; interactive children
+    // use relative + z-10 to sit above the overlay and receive their own clicks.
+    <div className="card p-5 hover:shadow-md transition-shadow relative">
+      <Link
+        to={`/designs/${design.id}`}
+        className="absolute inset-0 rounded-2xl"
+        aria-label={design.title}
+      />
+
       <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h3 className="font-semibold text-gray-900 truncate">{design.title}</h3>
-          <p className="mt-1 text-sm text-gray-600 line-clamp-2">{design.hypothesis}</p>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-ink leading-snug">{design.title}</h3>
+          {design.summary && (
+            <p className="mt-1.5 text-sm text-muted line-clamp-2 leading-relaxed">
+              {design.summary}
+            </p>
+          )}
         </div>
-        <span className="shrink-0 text-xs font-medium bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full">
+        <span className="shrink-0 text-xs font-medium bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
           {design.difficulty_level}
         </span>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
         {design.discipline_tags.map((tag) => (
-          <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+          <span key={tag} className="text-xs bg-surface-2 text-muted px-2 py-0.5 rounded-full">
             {tag}
           </span>
         ))}
       </div>
 
-      <div className="mt-3 flex items-center gap-4 text-xs text-gray-400">
-        <span>{design.execution_count} execution{design.execution_count !== 1 ? 's' : ''}</span>
+      {/* Authors — rendered above the stretched link via relative + z-10 */}
+      {design.author_ids.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-1 text-xs text-muted relative z-10">
+          <span>by</span>
+          {design.author_ids.map((uid, i) => (
+            <span key={uid} className="flex items-center gap-1">
+              <UserDisplayName uid={uid} className="text-xs" />
+              {i < design.author_ids.length - 1 && <span>,</span>}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-2 flex items-center gap-4 text-xs text-muted">
+        <span>{design.execution_count} run{design.execution_count !== 1 ? 's' : ''}</span>
         <span>{design.derived_design_count} fork{design.derived_design_count !== 1 ? 's' : ''}</span>
       </div>
-    </Link>
+    </div>
   )
 }

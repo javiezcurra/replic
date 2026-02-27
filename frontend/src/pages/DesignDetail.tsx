@@ -7,6 +7,7 @@ import type { Material } from '../types/material'
 import MaterialCard from '../components/MaterialCard'
 import MaterialDetailModal from '../components/MaterialDetailModal'
 import ReviewsSection from '../components/ReviewsSection'
+import UserDisplayName from '../components/UserDisplayName'
 
 const FORK_TYPES: { value: ForkType; label: string; description: string }[] = [
   { value: 'replication', label: 'Replication', description: 'Reproduce the same study to verify results' },
@@ -327,47 +328,50 @@ export default function DesignDetail() {
           >
             {viewedDesign.difficulty_level}
           </span>
-          {design.status !== 'published' && (
-            <span
-              className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                design.status === 'draft'
-                  ? 'bg-yellow-50 text-yellow-700'
-                  : 'bg-gray-100 text-gray-500'
-              }`}
-            >
-              {design.status.charAt(0).toUpperCase() + design.status.slice(1)}
-            </span>
-          )}
-          {isAuthor && design.has_draft_changes && selectedSnapshot === null && (
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
-              Unpublished draft
-            </span>
-          )}
         </div>
 
-        {/* Title + version selector */}
+        {/* Title + version selector + status chip */}
         <div className="flex flex-wrap items-start gap-3">
           <h1 className="text-3xl font-display font-bold text-dark leading-tight flex-1">
             {viewedDesign.title}
           </h1>
-          {showVersionSelector && (
-            <div className="flex items-center gap-2 shrink-0 mt-1">
-              <label className="text-xs text-muted">Version</label>
-              <select
-                value={selectorKey}
-                onChange={(e) => handleVersionSelect(e.target.value)}
-                className="text-xs border border-surface-2 rounded-lg px-2 py-1 bg-white text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
-                style={{ fontFamily: 'var(--font-mono)' }}
-              >
-                <option value="current">{currentOptionLabel}</option>
-                {versionOptions.map((v) => (
-                  <option key={v.version_number} value={`v${v.version_number}`}>
-                    v{v.version_number} — {new Date(v.published_at).toLocaleDateString()}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="flex items-center gap-2 shrink-0 mt-1 flex-wrap">
+            {/* Status chip — always shown */}
+            <span
+              className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                design.status === 'draft'
+                  ? 'bg-yellow-50 text-yellow-700'
+                  : design.status === 'locked'
+                  ? 'bg-gray-100 text-gray-500'
+                  : 'bg-green-50 text-green-700'
+              }`}
+            >
+              {design.status.charAt(0).toUpperCase() + design.status.slice(1)}
+            </span>
+            {isAuthor && design.has_draft_changes && selectedSnapshot === null && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                Unpublished changes
+              </span>
+            )}
+            {showVersionSelector && (
+              <>
+                <label className="text-xs text-muted">Version</label>
+                <select
+                  value={selectorKey}
+                  onChange={(e) => handleVersionSelect(e.target.value)}
+                  className="text-xs border border-surface-2 rounded-lg px-2 py-1 bg-white text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  style={{ fontFamily: 'var(--font-mono)' }}
+                >
+                  <option value="current">{currentOptionLabel}</option>
+                  {versionOptions.map((v) => (
+                    <option key={v.version_number} value={`v${v.version_number}`}>
+                      v{v.version_number} — {new Date(v.published_at).toLocaleDateString()}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Historical version banner */}
@@ -407,16 +411,10 @@ export default function DesignDetail() {
           </div>
         )}
 
-        {/* Stats row */}
+        {/* Stats row — Runs · Forks · Updated · Created */}
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted">
           <span>{design.execution_count} run{design.execution_count !== 1 ? 's' : ''}</span>
           <span>{design.derived_design_count} fork{design.derived_design_count !== 1 ? 's' : ''}</span>
-          {design.published_version > 0 && (
-            <span style={{ fontFamily: 'var(--font-mono)' }}>
-              v{design.published_version}
-              {design.has_draft_changes && isAuthor ? ' + draft' : ''}
-            </span>
-          )}
           {viewedDesign.fork_metadata && (
             <span>
               Forked from{' '}
@@ -430,6 +428,7 @@ export default function DesignDetail() {
             </span>
           )}
           <span>Updated {new Date(viewedDesign.updated_at).toLocaleDateString()}</span>
+          <span>Created {new Date(design.created_at).toLocaleDateString()}</span>
         </div>
       </header>
 
@@ -623,67 +622,31 @@ export default function DesignDetail() {
               </div>
             )}
 
-            {/* About */}
+            {/* Authors */}
             <div className="card p-5">
-              <SectionLabel>About</SectionLabel>
-              <dl className="space-y-3 text-sm">
-                <div>
-                  <dt className="text-xs text-muted mb-1">Difficulty</dt>
-                  <dd>
-                    <span
-                      className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${DIFFICULTY_COLORS[viewedDesign.difficulty_level] ?? 'bg-gray-100 text-gray-600'}`}
-                    >
-                      {viewedDesign.difficulty_level}
-                    </span>
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted mb-1">Status</dt>
-                  <dd className="text-ink capitalize">{design.status}</dd>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <dt className="text-xs text-muted mb-1">Runs</dt>
-                    <dd className="text-ink font-medium">{design.execution_count}</dd>
+              <SectionLabel>Authors</SectionLabel>
+              <div className="space-y-2">
+                {viewedDesign.author_ids.map((uid) => (
+                  <div key={uid} className="text-sm">
+                    <UserDisplayName uid={uid} className="text-sm" />
                   </div>
-                  <div>
-                    <dt className="text-xs text-muted mb-1">Forks</dt>
-                    <dd className="text-ink font-medium">{design.derived_design_count}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted mb-1">Version</dt>
-                    <dd className="text-ink font-medium" style={{ fontFamily: 'var(--font-mono)' }}>
-                      {design.published_version > 0 ? `v${design.published_version}` : '—'}
-                    </dd>
-                  </div>
-                </div>
-                {viewedDesign.fork_metadata && (
-                  <div>
-                    <dt className="text-xs text-muted mb-1">Forked from</dt>
-                    <dd>
-                      <Link
-                        to={`/designs/${viewedDesign.fork_metadata.parent_design_id}`}
-                        className="text-primary hover:underline"
-                      >
-                        Parent design
-                      </Link>
-                      <span className="text-muted text-xs ml-1">({viewedDesign.fork_metadata.fork_type})</span>
-                    </dd>
-                  </div>
+                ))}
+                {viewedDesign.author_ids.length === 0 && (
+                  <p className="text-sm text-muted">No authors listed.</p>
                 )}
-                {viewedDesign.seeking_collaborators && (
-                  <div>
-                    <span className="inline-block text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
-                      Seeking collaborators
-                    </span>
-                    {viewedDesign.collaboration_notes && (
-                      <p className="mt-2 text-xs text-muted leading-relaxed">
-                        {viewedDesign.collaboration_notes}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </dl>
+              </div>
+              {viewedDesign.seeking_collaborators && (
+                <div className="mt-4 pt-4 border-t border-surface-2">
+                  <span className="inline-block text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
+                    Seeking collaborators
+                  </span>
+                  {viewedDesign.collaboration_notes && (
+                    <p className="mt-2 text-xs text-muted leading-relaxed">
+                      {viewedDesign.collaboration_notes}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Actions */}
