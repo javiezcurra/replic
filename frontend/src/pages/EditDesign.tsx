@@ -7,6 +7,7 @@ import type { CollaboratorEntry } from '../types/user'
 import type { Review, FieldSuggestion, ReadinessSignal, SuggestionType } from '../types/review'
 import DesignForm, { defaultFormValues, formValuesToBody, type DesignFormValues } from '../components/DesignForm'
 import UserDisplayName from '../components/UserDisplayName'
+import { useAuth } from '../contexts/AuthContext'
 
 // ─── Display helpers ──────────────────────────────────────────────────────────
 
@@ -96,6 +97,7 @@ function designToFormValues(d: Design): DesignFormValues {
 export default function EditDesign() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [values, setValues] = useState<DesignFormValues>(defaultFormValues())
   const [design, setDesign] = useState<Design | null>(null)
   const [loading, setLoading] = useState(true)
@@ -115,6 +117,8 @@ export default function EditDesign() {
     try {
       const res = await api.get<{ status: string; data: CollaboratorEntry[] }>('/api/users/me/collaborators')
       const nameMap: Record<string, string> = {}
+      // Seed with the current user's own display name so their chip resolves correctly
+      if (user?.uid && user.displayName) nameMap[user.uid] = user.displayName
       res.data.forEach((c) => { nameMap[c.uid] = c.displayName })
       setValues((prev) => ({
         ...prev,
@@ -324,7 +328,7 @@ export default function EditDesign() {
           /* Two-column layout when editing a versioned (published) design */
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
             <div className="lg:col-span-2 space-y-6">
-              <DesignForm values={values} onChange={setValues} lockedMethodology={isLocked} />
+              <DesignForm values={values} onChange={setValues} lockedMethodology={isLocked} ownerUid={design?.owner_uid} />
               {error && <p className="text-sm text-red-600">{error}</p>}
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={submitting} className="btn-primary text-sm disabled:opacity-50">
@@ -471,7 +475,7 @@ export default function EditDesign() {
         ) : (
           /* Single-column layout for new (never-published) drafts */
           <div className="space-y-6">
-            <DesignForm values={values} onChange={setValues} lockedMethodology={isLocked} />
+            <DesignForm values={values} onChange={setValues} lockedMethodology={isLocked} ownerUid={design?.owner_uid} />
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={submitting} className="btn-primary text-sm disabled:opacity-50">

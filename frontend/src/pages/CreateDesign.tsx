@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { Design } from '../types/design'
 import DesignForm, { defaultFormValues, formValuesToBody, type DesignFormValues } from '../components/DesignForm'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function CreateDesign() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [values, setValues] = useState<DesignFormValues>(defaultFormValues())
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -30,7 +32,7 @@ export default function CreateDesign() {
       <h1 className="text-2xl font-bold text-gray-900 mb-6">New Experiment Design</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <DesignForm values={values} onChange={setValues} />
+        <DesignForm values={values} onChange={setValues} ownerUid={user?.uid} />
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 

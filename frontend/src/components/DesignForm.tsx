@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
 import type {
   CreateDesignBody,
   Criticality,
@@ -131,6 +132,7 @@ interface Props {
   values: DesignFormValues
   onChange: (v: DesignFormValues) => void
   lockedMethodology?: boolean
+  ownerUid?: string
 }
 
 // ─── Tooltip ──────────────────────────────────────────────────────────────────
@@ -372,18 +374,22 @@ function DesignReferencePicker({
 // ─── CoauthorsDrawer ──────────────────────────────────────────────────────────
 function CoauthorsDrawer({
   selectedUids,
+  ownerUid,
   onAdd,
   onRemove,
   onClose,
 }: {
   selectedUids: Set<string>
+  ownerUid?: string
   onAdd: (c: CoauthorEntry) => void
   onRemove: (uid: string) => void
   onClose: () => void
 }) {
+  const { user } = useAuth()
   const [collaborators, setCollaborators] = useState<CollaboratorEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [pendingRemoval, setPendingRemoval] = useState<CoauthorEntry | null>(null)
 
   useEffect(() => {
     api
@@ -395,11 +401,14 @@ function CoauthorsDrawer({
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        if (pendingRemoval) setPendingRemoval(null)
+        else onClose()
+      }
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [onClose])
+  }, [onClose, pendingRemoval])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
@@ -407,13 +416,25 @@ function CoauthorsDrawer({
     return collaborators.filter((c) => c.displayName.toLowerCase().includes(q))
   }, [collaborators, search])
 
+  function requestRemove(c: CollaboratorEntry) {
+    setPendingRemoval({ uid: c.uid, displayName: c.displayName })
+  }
+
+  function confirmRemove() {
+    if (!pendingRemoval) return
+    onRemove(pendingRemoval.uid)
+    setPendingRemoval(null)
+  }
+
+  const isSelfRemoval = pendingRemoval?.uid === user?.uid
+
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
+      <div className="fixed inset-0 z-40 bg-black/40" onClick={pendingRemoval ? undefined : onClose} />
       <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm bg-white shadow-xl flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
           <h2 className="font-semibold text-base" style={{ color: 'var(--color-dark)' }}>
-            Add Co-Authors
+            Manage Co-Authors
           </h2>
           <button
             type="button"
@@ -456,6 +477,7 @@ function CoauthorsDrawer({
             <ul className="divide-y divide-gray-100">
               {filtered.map((c) => {
                 const isSelected = selectedUids.has(c.uid)
+                const isOwner = c.uid === ownerUid
                 return (
                   <li key={c.uid} className="flex items-center gap-3 px-4 py-3">
                     <div
@@ -468,28 +490,36 @@ function CoauthorsDrawer({
                       <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
                         {c.displayName}
                       </p>
-                      {c.affiliation && (
+                      {isOwner ? (
+                        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Design creator</p>
+                      ) : c.affiliation ? (
                         <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
                           {c.affiliation}
                         </p>
-                      )}
+                      ) : null}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        isSelected
-                          ? onRemove(c.uid)
-                          : onAdd({ uid: c.uid, displayName: c.displayName })
-                      }
-                      className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white
-                                  transition-colors ${isSelected ? 'bg-red-400 hover:bg-red-500' : 'hover:opacity-80'}`}
-                      style={isSelected ? {} : { background: 'var(--color-primary)' }}
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                          d={isSelected ? 'M6 18L18 6M6 6l12 12' : 'M12 4v16m8-8H4'} />
-                      </svg>
-                    </button>
+                    {isOwner ? (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                        Creator
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          isSelected
+                            ? requestRemove(c)
+                            : onAdd({ uid: c.uid, displayName: c.displayName })
+                        }
+                        className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white
+                                    transition-colors ${isSelected ? 'bg-red-400 hover:bg-red-500' : 'hover:opacity-80'}`}
+                        style={isSelected ? {} : { background: 'var(--color-primary)' }}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                            d={isSelected ? 'M6 18L18 6M6 6l12 12' : 'M12 4v16m8-8H4'} />
+                        </svg>
+                      </button>
+                    )}
                   </li>
                 )
               })}
@@ -497,6 +527,47 @@ function CoauthorsDrawer({
           )}
         </div>
       </div>
+
+      {/* Confirm-removal modal */}
+      {pendingRemoval && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setPendingRemoval(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10">
+            <h3 className="font-semibold text-base mb-2" style={{ color: 'var(--color-dark)' }}>
+              Remove co-author?
+            </h3>
+            {isSelfRemoval ? (
+              <p className="text-sm mb-4" style={{ color: 'var(--color-text)' }}>
+                You are about to remove yourself as a co-author of this design.{' '}
+                <strong>You will no longer be able to edit or publish it.</strong> This action takes
+                effect immediately after saving.
+              </p>
+            ) : (
+              <p className="text-sm mb-4" style={{ color: 'var(--color-text)' }}>
+                Remove <strong>{pendingRemoval.displayName}</strong> as a co-author? They will lose
+                edit access to this design.
+              </p>
+            )}
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setPendingRemoval(null)}
+                className="px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmRemove}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors hover:opacity-90"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {isSelfRemoval ? 'Remove myself' : 'Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -504,10 +575,12 @@ function CoauthorsDrawer({
 // ─── CoauthorsPicker ──────────────────────────────────────────────────────────
 function CoauthorsPicker({
   selected,
+  ownerUid,
   onAdd,
   onRemove,
 }: {
   selected: CoauthorEntry[]
+  ownerUid?: string
   onAdd: (c: CoauthorEntry) => void
   onRemove: (uid: string) => void
 }) {
@@ -517,23 +590,16 @@ function CoauthorsPicker({
 
   return (
     <div>
-      {/* Selected chips */}
+      {/* Selected chips — read-only; manage from the drawer */}
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
           {selected.map((c) => (
             <span
               key={c.uid}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs
+              className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs
                          bg-brand-50 text-brand-700 border border-brand-200"
             >
               {c.displayName}
-              <button
-                type="button"
-                onClick={() => onRemove(c.uid)}
-                className="text-brand-400 hover:text-brand-700 leading-none"
-              >
-                ×
-              </button>
             </span>
           ))}
         </div>
@@ -547,14 +613,15 @@ function CoauthorsPicker({
                    hover:text-brand-600 transition-colors"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
         </svg>
-        + Add Co-Authors
+        Manage Co-Authors
       </button>
 
       {showDrawer && (
         <CoauthorsDrawer
           selectedUids={selectedUids}
+          ownerUid={ownerUid}
           onAdd={onAdd}
           onRemove={onRemove}
           onClose={() => setShowDrawer(false)}
@@ -565,7 +632,7 @@ function CoauthorsPicker({
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function DesignForm({ values, onChange, lockedMethodology = false }: Props) {
+export default function DesignForm({ values, onChange, lockedMethodology = false, ownerUid }: Props) {
   const [showMaterialsDrawer, setShowMaterialsDrawer] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
@@ -850,6 +917,7 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
               />
               <CoauthorsPicker
                 selected={values.coauthors}
+                ownerUid={ownerUid}
                 onAdd={(c) => {
                   if (!values.coauthors.find((x) => x.uid === c.uid)) {
                     set('coauthors', [...values.coauthors, c])
