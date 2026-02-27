@@ -188,43 +188,85 @@ function EmptyMsg({ children }: { children: React.ReactNode }) {
   return <p className="text-sm text-muted text-center py-3">{children}</p>
 }
 
-function DesignEntryRow({ entry }: { entry: PipelineEntry }) {
-  return (
-    <Link
-      to={`/designs/${entry.designId}`}
-      className="flex items-center gap-2 px-2 py-2.5 rounded-lg hover:bg-surface transition-colors group"
-    >
-      <span className="flex-1 text-sm font-medium text-ink truncate group-hover:text-primary transition-colors">
-        {entry.title}
-      </span>
-      <span className="shrink-0 text-xs text-muted" style={{ fontFamily: 'var(--font-mono)' }}>
-        {new Date(entry.addedAt).toLocaleDateString()}
-      </span>
-    </Link>
-  )
+const ENTRY_STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  published: 'Published',
+  locked: 'Locked',
+}
+const ENTRY_STATUS_COLORS: Record<string, string> = {
+  draft: 'bg-yellow-50 text-yellow-700',
+  published: 'bg-green-50 text-green-700',
+  locked: 'bg-gray-100 text-gray-600',
+}
+const ENTRY_DIFFICULTY_COLORS: Record<string, string> = {
+  'Pre-K':         'bg-emerald-50 text-emerald-700',
+  'Elementary':    'bg-emerald-50 text-emerald-700',
+  'Middle School': 'bg-sky-50 text-sky-700',
+  'High School':   'bg-blue-50 text-blue-700',
+  'Undergraduate': 'bg-violet-50 text-violet-700',
+  'Graduate':      'bg-purple-50 text-purple-700',
+  'Professional':  'bg-rose-50 text-rose-700',
 }
 
-function WatchlistEntryRow({ entry }: { entry: WatchlistEntry }) {
+function CompactEntryCard({ entry, watchlistSource }: {
+  entry: PipelineEntry
+  watchlistSource?: 'manual' | 'review'
+}) {
   return (
-    <Link
-      to={`/designs/${entry.designId}`}
-      className="flex items-center gap-2 px-2 py-2.5 rounded-lg hover:bg-surface transition-colors group"
+    <div
+      className="relative rounded-xl border border-gray-100 p-3.5 hover:shadow-sm transition-shadow"
+      style={{ background: 'var(--color-surface)' }}
     >
-      <span className="flex-1 text-sm font-medium text-ink truncate group-hover:text-primary transition-colors">
-        {entry.title}
-      </span>
-      {entry.source === 'review' && (
+      <Link
+        to={`/designs/${entry.designId}`}
+        className="absolute inset-0 rounded-xl"
+        aria-label={entry.title}
+      />
+
+      {/* Row 1: title + status chip */}
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <h3 className="font-semibold text-ink text-sm leading-snug">{entry.title}</h3>
         <span
-          className="shrink-0 text-xs px-1.5 py-0.5 rounded-full font-medium"
-          style={{ background: 'var(--color-accent)', color: 'var(--color-text)' }}
+          className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${ENTRY_STATUS_COLORS[entry.status] ?? 'bg-gray-100 text-gray-600'}`}
         >
-          reviewed
+          {ENTRY_STATUS_LABELS[entry.status] ?? entry.status}
         </span>
-      )}
-      <span className="shrink-0 text-xs text-muted" style={{ fontFamily: 'var(--font-mono)' }}>
-        {new Date(entry.addedAt).toLocaleDateString()}
-      </span>
-    </Link>
+      </div>
+
+      {/* Row 2: date added + optional "reviewed" badge */}
+      <div className="flex items-center gap-2 text-xs text-muted mb-2.5">
+        <span style={{ fontFamily: 'var(--font-mono)' }}>
+          {new Date(entry.addedAt).toLocaleDateString()}
+        </span>
+        {watchlistSource === 'review' && (
+          <span
+            className="px-1.5 py-0.5 rounded-full font-medium"
+            style={{ background: 'var(--color-accent)', color: 'var(--color-text)' }}
+          >
+            reviewed
+          </span>
+        )}
+      </div>
+
+      {/* Row 3: difficulty chip | discipline tags */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span
+          className={`text-xs font-medium px-2 py-0.5 rounded-full ${ENTRY_DIFFICULTY_COLORS[entry.difficulty_level] ?? 'bg-gray-100 text-gray-600'}`}
+        >
+          {entry.difficulty_level}
+        </span>
+        {entry.discipline_tags.length > 0 && (
+          <>
+            <div className="h-3 w-px bg-gray-200 rounded-full" />
+            {entry.discipline_tags.map((tag) => (
+              <span key={tag} className="text-xs bg-white text-muted px-2 py-0.5 rounded-full border border-gray-100">
+                {tag}
+              </span>
+            ))}
+          </>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -346,9 +388,9 @@ function CommandCenter({ data }: { data: LabHubData }) {
           {data.pipeline.length === 0 ? (
             <EmptyMsg>Your pipeline is empty.</EmptyMsg>
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className="space-y-2">
               {data.pipeline.map((e) => (
-                <DesignEntryRow key={e.designId} entry={e} />
+                <CompactEntryCard key={e.designId} entry={e} />
               ))}
             </div>
           )}
@@ -365,9 +407,9 @@ function CommandCenter({ data }: { data: LabHubData }) {
           {data.watchlist.length === 0 ? (
             <EmptyMsg>Nothing on your watchlist yet.</EmptyMsg>
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className="space-y-2">
               {data.watchlist.map((e) => (
-                <WatchlistEntryRow key={e.designId} entry={e} />
+                <CompactEntryCard key={e.designId} entry={e} watchlistSource={e.source} />
               ))}
             </div>
           )}
