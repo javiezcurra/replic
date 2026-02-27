@@ -376,20 +376,18 @@ function CoauthorsDrawer({
   selectedUids,
   ownerUid,
   onAdd,
-  onRemove,
+  onRequestRemove,
   onClose,
 }: {
   selectedUids: Set<string>
   ownerUid?: string
   onAdd: (c: CoauthorEntry) => void
-  onRemove: (uid: string) => void
+  onRequestRemove: (c: CoauthorEntry) => void
   onClose: () => void
 }) {
-  const { user } = useAuth()
   const [collaborators, setCollaborators] = useState<CollaboratorEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [pendingRemoval, setPendingRemoval] = useState<CoauthorEntry | null>(null)
 
   useEffect(() => {
     api
@@ -401,14 +399,11 @@ function CoauthorsDrawer({
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        if (pendingRemoval) setPendingRemoval(null)
-        else onClose()
-      }
+      if (e.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [onClose, pendingRemoval])
+  }, [onClose])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
@@ -416,21 +411,9 @@ function CoauthorsDrawer({
     return collaborators.filter((c) => c.displayName.toLowerCase().includes(q))
   }, [collaborators, search])
 
-  function requestRemove(c: CollaboratorEntry) {
-    setPendingRemoval({ uid: c.uid, displayName: c.displayName })
-  }
-
-  function confirmRemove() {
-    if (!pendingRemoval) return
-    onRemove(pendingRemoval.uid)
-    setPendingRemoval(null)
-  }
-
-  const isSelfRemoval = pendingRemoval?.uid === user?.uid
-
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={pendingRemoval ? undefined : onClose} />
+      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
       <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm bg-white shadow-xl flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
           <h2 className="font-semibold text-base" style={{ color: 'var(--color-dark)' }}>
@@ -507,7 +490,7 @@ function CoauthorsDrawer({
                         type="button"
                         onClick={() =>
                           isSelected
-                            ? requestRemove(c)
+                            ? onRequestRemove({ uid: c.uid, displayName: c.displayName })
                             : onAdd({ uid: c.uid, displayName: c.displayName })
                         }
                         className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white
@@ -527,47 +510,6 @@ function CoauthorsDrawer({
           )}
         </div>
       </div>
-
-      {/* Confirm-removal modal */}
-      {pendingRemoval && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setPendingRemoval(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10">
-            <h3 className="font-semibold text-base mb-2" style={{ color: 'var(--color-dark)' }}>
-              Remove co-author?
-            </h3>
-            {isSelfRemoval ? (
-              <p className="text-sm mb-4" style={{ color: 'var(--color-text)' }}>
-                You are about to remove yourself as a co-author of this design.{' '}
-                <strong>You will no longer be able to edit or publish it.</strong> This action takes
-                effect immediately after saving.
-              </p>
-            ) : (
-              <p className="text-sm mb-4" style={{ color: 'var(--color-text)' }}>
-                Remove <strong>{pendingRemoval.displayName}</strong> as a co-author? They will lose
-                edit access to this design.
-              </p>
-            )}
-            <div className="flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={() => setPendingRemoval(null)}
-                className="px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmRemove}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors hover:opacity-90"
-                style={{ background: 'var(--color-primary)' }}
-              >
-                {isSelfRemoval ? 'Remove myself' : 'Remove'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   )
 }
@@ -584,9 +526,28 @@ function CoauthorsPicker({
   onAdd: (c: CoauthorEntry) => void
   onRemove: (uid: string) => void
 }) {
+  const { user } = useAuth()
   const [showDrawer, setShowDrawer] = useState(false)
+  const [pendingRemoval, setPendingRemoval] = useState<CoauthorEntry | null>(null)
 
   const selectedUids = useMemo(() => new Set(selected.map((c) => c.uid)), [selected])
+
+  useEffect(() => {
+    if (!pendingRemoval) return
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setPendingRemoval(null)
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [pendingRemoval])
+
+  function confirmRemove() {
+    if (!pendingRemoval) return
+    onRemove(pendingRemoval.uid)
+    setPendingRemoval(null)
+  }
+
+  const isSelfRemoval = pendingRemoval?.uid === user?.uid
 
   return (
     <div>
@@ -623,9 +584,54 @@ function CoauthorsPicker({
           selectedUids={selectedUids}
           ownerUid={ownerUid}
           onAdd={onAdd}
-          onRemove={onRemove}
+          onRequestRemove={setPendingRemoval}
           onClose={() => setShowDrawer(false)}
         />
+      )}
+
+      {/* Confirm-removal modal — rendered outside the drawer to avoid z-index conflicts */}
+      {pendingRemoval && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setPendingRemoval(null)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            <div
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 pointer-events-auto"
+            >
+              <h3 className="font-semibold text-base mb-2" style={{ color: 'var(--color-dark)' }}>
+                Remove co-author?
+              </h3>
+              {isSelfRemoval ? (
+                <p className="text-sm mb-4" style={{ color: 'var(--color-text)' }}>
+                  You are about to remove yourself as a co-author of this design.{' '}
+                  <strong>You will no longer be able to edit or publish it.</strong> This action takes
+                  effect immediately after saving.
+                </p>
+              ) : (
+                <p className="text-sm mb-4" style={{ color: 'var(--color-text)' }}>
+                  Remove <strong>{pendingRemoval.displayName}</strong> as a co-author? They will lose
+                  edit access to this design.
+                </p>
+              )}
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setPendingRemoval(null)}
+                  className="px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmRemove}
+                  className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors hover:opacity-90"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  {isSelfRemoval ? 'Remove myself' : 'Remove'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )
