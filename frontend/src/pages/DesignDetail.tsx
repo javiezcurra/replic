@@ -7,6 +7,7 @@ import type { Material } from '../types/material'
 import MaterialCard from '../components/MaterialCard'
 import MaterialDetailModal from '../components/MaterialDetailModal'
 import ReviewsSection from '../components/ReviewsSection'
+import ReviewInbox from '../components/ReviewInbox'
 import UserDisplayName from '../components/UserDisplayName'
 
 const FORK_TYPES: { value: ForkType; label: string; description: string }[] = [
@@ -811,6 +812,13 @@ export default function DesignDetail() {
               isAuthor={isAuthor}
               isPublished={design.status === 'published'}
             />
+          </div>
+        )}
+
+        {/* ── Review inbox (owner-only, below reviews section) ── */}
+        {isAuthor && design.status === 'published' && selectedSnapshot === null && (
+          <div className="mt-4">
+            <ReviewInbox designId={design.id} />
           </div>
         )}
         </>
