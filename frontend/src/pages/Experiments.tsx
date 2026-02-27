@@ -65,7 +65,7 @@ export default function Experiments() {
         <select
           value={discipline}
           onChange={(e) => setDiscipline(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="select-filter"
         >
           <option value="">All disciplines</option>
           <option value="biology">Biology</option>
@@ -79,7 +79,7 @@ export default function Experiments() {
         <select
           value={difficulty}
           onChange={(e) => setDifficulty(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="select-filter"
         >
           <option value="">All levels</option>
           {DIFFICULTY_OPTIONS.map((d) => (

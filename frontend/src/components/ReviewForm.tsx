@@ -33,7 +33,7 @@ const FIELD_OPTIONS: { value: string; label: string }[] = [
   { value: 'title',                  label: 'Title' },
   { value: 'summary',                label: 'Summary' },
   { value: 'hypothesis',             label: 'Hypothesis' },
-  { value: 'steps',                  label: 'Procedure / Steps' },
+  { value: 'steps',                  label: 'Methodology' },
   { value: 'materials',              label: 'Materials' },
   { value: 'research_questions',     label: 'Research Questions' },
   { value: 'independent_variables',  label: 'Independent Variables' },
@@ -591,8 +591,8 @@ function SuggestionBlock({
               proposedText={entry.proposedText}
               onSelectIndex={handleSubIndexSelect}
               onProposedChange={(text) => onUpdate({ proposedText: text })}
-              addNewLabel="Propose a new step"
-              proposedPlaceholder="Write the new step instruction…"
+              addNewLabel="Propose a new methodology step"
+              proposedPlaceholder="Write the new methodology step…"
               replacePlaceholder="Proposed replacement for this step…"
             />
           )}

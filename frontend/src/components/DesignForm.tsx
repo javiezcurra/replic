@@ -368,7 +368,7 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
     onChange({ ...values, [key]: val })
   }
 
-  // ── Steps ──────────────────────────────────────────────────────────────────
+  // ── Methodology steps ──────────────────────────────────────────────────────
   function addStep() {
     set('steps', [...values.steps, { step_number: values.steps.length + 1, instruction: '' }])
   }
@@ -529,9 +529,9 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
         )}
       </div>
 
-      {/* ── 5. Steps ─────────────────────────────────────────────────────── */}
+      {/* ── 5. Methodology ───────────────────────────────────────────────── */}
       <div>
-        <FieldLabel label="Steps" required />
+        <FieldLabel label="Methodology" required />
         {values.steps.map((step, i) => (
           <div key={i} className="flex gap-2 mb-2">
             <span className="shrink-0 w-6 text-sm text-gray-400 pt-2">{step.step_number}.</span>
@@ -541,7 +541,7 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
               value={step.instruction}
               disabled={lockedMethodology}
               onChange={(e) => updateStep(i, e.target.value)}
-              placeholder={`Step ${step.step_number} instruction`}
+              placeholder={`Step ${step.step_number}`}
               className="flex-1 input-sm resize-y"
             />
             {!lockedMethodology && values.steps.length > 1 && (

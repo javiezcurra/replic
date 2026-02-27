@@ -13,7 +13,7 @@ const FIELD_DISPLAY_NAMES: Record<string, string> = {
   title:                  'Title',
   summary:                'Summary',
   hypothesis:             'Hypothesis',
-  steps:                  'Procedure / Steps',
+  steps:                  'Methodology',
   materials:              'Materials',
   research_questions:     'Research Questions',
   independent_variables:  'Independent Variables',
