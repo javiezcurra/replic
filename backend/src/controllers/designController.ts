@@ -94,6 +94,7 @@ function mergeDraftWithMain(draftData: Design, main: Design): Design {
     is_public: main.is_public,
     published_version: main.published_version,
     has_draft_changes: main.has_draft_changes,
+    owner_uid: main.owner_uid,
     author_ids: main.author_ids,
     review_status: main.review_status,
     review_count: main.review_count,
@@ -167,7 +168,8 @@ export async function createDesign(
       version: 1,
       published_version: 0,
       has_draft_changes: false,
-      author_ids: [req.user!.uid],
+      owner_uid: req.user!.uid,
+      author_ids: [req.user!.uid, ...(body.coauthor_uids ?? [])],
       review_status: 'unreviewed',
       review_count: 0,
       execution_count: 0,
@@ -330,6 +332,10 @@ export async function updateDesign(
         version: design.version + 1,
         updated_at: FieldValue.serverTimestamp(),
       }
+      // Keep author_ids in sync: always [owner_uid, ...coauthor_uids]
+      if (body.coauthor_uids !== undefined) {
+        patch.author_ids = [design.owner_uid, ...body.coauthor_uids]
+      }
       await ref.update(patch)
       const updated = await ref.get()
       res.status(200).json({ status: 'ok', data: toResponse(updated.data() as Design) })
@@ -348,11 +354,16 @@ export async function updateDesign(
         version: design.version + 1,
         updated_at: FieldValue.serverTimestamp(),
       })
-      await ref.update({
+      const mainPatch: Record<string, unknown> = {
         has_draft_changes: true,
         version: design.version + 1,
         updated_at: FieldValue.serverTimestamp(),
-      })
+      }
+      // Immediately sync author_ids on the main doc so co-author access is live
+      if (body.coauthor_uids !== undefined) {
+        mainPatch.author_ids = [design.owner_uid, ...body.coauthor_uids]
+      }
+      await ref.update(mainPatch)
     } else {
       // Subsequent edit: update the existing draft document.
       const draftSnap = await dr.get()
@@ -363,10 +374,15 @@ export async function updateDesign(
         version: currentDraft.version + 1,
         updated_at: FieldValue.serverTimestamp(),
       })
-      await ref.update({
+      const mainPatch: Record<string, unknown> = {
         version: currentDraft.version + 1,
         updated_at: FieldValue.serverTimestamp(),
-      })
+      }
+      // Immediately sync author_ids on the main doc so co-author access is live
+      if (body.coauthor_uids !== undefined) {
+        mainPatch.author_ids = [design.owner_uid, ...body.coauthor_uids]
+      }
+      await ref.update(mainPatch)
     }
 
     const [updatedDraftSnap, updatedMainSnap] = await Promise.all([dr.get(), ref.get()])
@@ -453,7 +469,8 @@ export async function publishDesign(
         id: design.id,
         status: design.status,
         is_public: design.is_public,
-        author_ids: design.author_ids,
+        owner_uid: design.owner_uid,
+        author_ids: [design.owner_uid, ...(draftDataClean.coauthor_uids ?? [])],
         review_status: design.review_status,
         review_count: design.review_count,
         execution_count: design.execution_count,
@@ -600,7 +617,9 @@ export async function forkDesign(
       version: 1,
       published_version: 0,
       has_draft_changes: false,
+      owner_uid: req.user!.uid,
       author_ids: [req.user!.uid],
+      coauthor_uids: [],
       review_status: 'unreviewed',
       review_count: 0,
       execution_count: 0,
