@@ -66,7 +66,7 @@ export async function listAllUsers(
 // ─── GET /api/admin/users/admins ──────────────────────────────────────────────
 // All users with is_admin === true.
 export async function listAdmins(
-  req: Request,
+  _req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> {
