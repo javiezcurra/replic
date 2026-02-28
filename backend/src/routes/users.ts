@@ -22,6 +22,7 @@ import {
   listWatchlist,
   isWatchlisted,
 } from '../controllers/watchlistController'
+import { listMyExecutions } from '../controllers/executionController'
 
 const router = Router()
 
@@ -45,6 +46,9 @@ router.get('/me/pipeline', listPipeline)
 router.get('/me/pipeline/:designId', isPipelined)
 router.post('/me/pipeline/:designId', addToPipeline)
 router.delete('/me/pipeline/:designId', removeFromPipeline)
+
+// My running executions
+router.get('/me/executions', listMyExecutions)
 
 // Watchlist
 router.get('/me/watchlist', listWatchlist)
