@@ -14,6 +14,7 @@ interface NotificationPayload {
   request_id?: string
   review_id?: string
   review_action?: ReviewInteractionAction
+  execution_id?: string
 }
 
 // Fire-and-forget — call without await in controllers.

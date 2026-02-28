@@ -9,6 +9,9 @@ export type NotificationType =
   | 'review_interaction'
   | 'admin_granted'
   | 'admin_revoked'
+  | 'experiment_started'
+  | 'added_as_co_experimenter'
+  | 'removed_as_co_experimenter'
 
 export type ReviewInteractionAction = 'accepted' | 'closed' | 'replied'
 
@@ -25,5 +28,6 @@ export interface Notification {
   request_id?: string
   review_id?: string
   review_action?: ReviewInteractionAction
+  execution_id?: string
   created_at: string
 }

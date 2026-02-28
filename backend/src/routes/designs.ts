@@ -12,6 +12,7 @@ import {
   forkDesign,
   deleteDesign,
 } from '../controllers/designController'
+import { startExecution, listExecutions } from '../controllers/executionController'
 import {
   submitReview,
   listReviews,
@@ -28,6 +29,7 @@ const router = Router()
 
 // Public — no auth required
 router.get('/', listDesigns)
+router.get('/:id/executions', listExecutions)
 router.get('/:id', optionalAuth, getDesign)           // optionalAuth so authors see their draft state
 router.get('/:id/versions', optionalAuth, listDesignVersions)
 router.get('/:id/versions/:versionNum', optionalAuth, getDesignVersion)
@@ -45,6 +47,7 @@ router.patch('/:id', updateDesign)
 router.post('/:id/publish', publishDesign)
 router.post('/:id/fork', forkDesign)
 router.delete('/:id', deleteDesign)
+router.post('/:id/executions', startExecution)
 router.post('/:id/reviews', submitReview)
 router.post('/:id/endorsements', endorseDesign)
 router.post('/:id/reviews/:reviewId/suggestions/:suggestionId/accept', acceptSuggestion)
