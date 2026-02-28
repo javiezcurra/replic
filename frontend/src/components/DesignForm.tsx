@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
+import { storage } from '../lib/firebase'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import type {
   CreateDesignBody,
   Criticality,
   DataType,
+  DesignFile,
   DesignMaterial,
   DifficultyLevel,
   DesignStep,
@@ -20,6 +23,14 @@ const DIFFICULTY_OPTIONS: DifficultyLevel[] = [
   'Pre-K', 'Elementary', 'Middle School', 'High School',
   'Undergraduate', 'Graduate', 'Professional',
 ]
+
+const MAX_FILE_BYTES = 20 * 1024 * 1024
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
 
 // Lightweight entry stored in the form — enough to display and convert to DesignMaterial
 export interface DesignMaterialEntry {
@@ -43,7 +54,7 @@ export interface CoauthorEntry {
 }
 
 export interface DesignFormValues {
-  // ── Main section (required fields in order) ──────────────────────────────
+  // ── Basic fields ─────────────────────────────────────────────────────────
   title: string
   summary: string
   discipline_tags: string
@@ -51,7 +62,10 @@ export interface DesignFormValues {
   materials: DesignMaterialEntry[]
   steps: DesignStep[]
   research_questions: ResearchQuestion[]
-  safety_considerations: string   // optional but in main section
+  safety_considerations: string
+  cover_image_url: string
+  // ── Design files ─────────────────────────────────────────────────────────
+  design_files: DesignFile[]
   // ── Advanced Details ─────────────────────────────────────────────────────
   reference_experiment_ids: string[]
   hypothesis: string
@@ -59,8 +73,6 @@ export interface DesignFormValues {
   dependent_variables: Variable[]
   controlled_variables: Variable[]
   analysis_plan: string
-  sample_size: string
-  seeking_collaborators: boolean
   collaboration_notes: string
   ethical_considerations: string
   disclaimers: string
@@ -77,14 +89,14 @@ export function defaultFormValues(): DesignFormValues {
     steps: [{ step_number: 1, instruction: '' }],
     research_questions: [{ id: crypto.randomUUID(), question: '', expected_data_type: 'numeric' }],
     safety_considerations: '',
+    cover_image_url: '',
+    design_files: [],
     reference_experiment_ids: [],
     hypothesis: '',
     independent_variables: [],
     dependent_variables: [],
     controlled_variables: [],
     analysis_plan: '',
-    sample_size: '',
-    seeking_collaborators: false,
     collaboration_notes: '',
     ethical_considerations: '',
     disclaimers: '',
@@ -118,13 +130,13 @@ export function formValuesToBody(v: DesignFormValues): CreateDesignBody {
       : {}),
     ...(v.safety_considerations.trim() ? { safety_considerations: v.safety_considerations } : {}),
     ...(v.reference_experiment_ids.length > 0 ? { reference_experiment_ids: v.reference_experiment_ids } : {}),
-    ...(v.sample_size ? { sample_size: parseInt(v.sample_size, 10) } : {}),
     ...(v.analysis_plan ? { analysis_plan: v.analysis_plan } : {}),
-    seeking_collaborators: v.seeking_collaborators,
     ...(v.collaboration_notes ? { collaboration_notes: v.collaboration_notes } : {}),
     ...(v.ethical_considerations ? { ethical_considerations: v.ethical_considerations } : {}),
     ...(v.disclaimers ? { disclaimers: v.disclaimers } : {}),
     coauthor_uids: v.coauthors.map((c) => c.uid),
+    ...(v.cover_image_url ? { cover_image_url: v.cover_image_url } : {}),
+    ...(v.design_files.length > 0 ? { design_files: v.design_files } : {}),
   }
 }
 
@@ -183,6 +195,204 @@ function SubHeader({ children }: { children: React.ReactNode }) {
     <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mt-5 mb-3 first:mt-0">
       {children}
     </p>
+  )
+}
+
+// ─── CoverImageUpload ─────────────────────────────────────────────────────────
+function CoverImageUpload({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const [uploading, setUploading] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setError('Please select an image file'); return }
+    if (file.size > 10 * 1024 * 1024) { setError('Image must be under 10 MB'); return }
+    setError('')
+    setUploading(true)
+    setProgress(0)
+    const sr = storageRef(storage, `designs/covers/${crypto.randomUUID()}_${file.name}`)
+    const task = uploadBytesResumable(sr, file)
+    task.on(
+      'state_changed',
+      (snap) => setProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+      (err) => { setError(err.message); setUploading(false) },
+      async () => { onChange(await getDownloadURL(task.snapshot.ref)); setUploading(false) },
+    )
+  }
+
+  return (
+    <div>
+      {value ? (
+        <div className="flex items-start gap-4">
+          <img
+            src={value}
+            alt="Cover"
+            className="h-28 w-44 object-cover rounded-xl border border-gray-200 shrink-0"
+          />
+          <div className="space-y-2 pt-1">
+            <button type="button" onClick={() => fileRef.current?.click()} className="btn-secondary text-xs">
+              Replace image
+            </button>
+            <button type="button" onClick={() => onChange('')} className="block text-xs text-red-500 hover:underline">
+              Remove
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="w-full border-2 border-dashed border-gray-300 rounded-xl p-5 text-center
+                     hover:border-gray-400 transition-colors disabled:opacity-50"
+        >
+          {uploading ? (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">Uploading… {progress}%</p>
+              <div className="w-full bg-gray-200 rounded-full h-1.5">
+                <div
+                  className="h-1.5 rounded-full transition-all"
+                  style={{ width: `${progress}%`, background: 'var(--color-primary)' }}
+                />
+              </div>
+            </div>
+          ) : (
+            <>
+              <svg className="mx-auto h-7 w-7 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm text-gray-500">Click to upload a cover image</p>
+              <p className="text-xs text-gray-400 mt-1">PNG, JPG, WebP — max 10 MB · optional</p>
+            </>
+          )}
+        </button>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+    </div>
+  )
+}
+
+// ─── DesignFilesUpload ────────────────────────────────────────────────────────
+function DesignFilesUpload({ files, onChange }: { files: DesignFile[]; onChange: (files: DesignFile[]) => void }) {
+  const [uploading, setUploading] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0)
+
+  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (selected.length === 0) return
+
+    const incomingSize = selected.reduce((sum, f) => sum + f.size, 0)
+    if (totalSize + incomingSize > MAX_FILE_BYTES) {
+      setError(`Total files cannot exceed 20 MB. Currently using ${formatBytes(totalSize)}.`)
+      return
+    }
+
+    setError('')
+    setUploading(true)
+    setProgress(0)
+
+    const uploaded: DesignFile[] = []
+    let done = 0
+
+    for (const file of selected) {
+      await new Promise<void>((resolve) => {
+        const sr = storageRef(storage, `designs/files/${crypto.randomUUID()}_${file.name}`)
+        const task = uploadBytesResumable(sr, file)
+        task.on(
+          'state_changed',
+          (snap) => {
+            const fileProgress = snap.bytesTransferred / snap.totalBytes
+            setProgress(Math.round(((done + fileProgress) / selected.length) * 100))
+          },
+          (err) => { setError(err.message); resolve() },
+          async () => {
+            uploaded.push({ name: file.name, url: await getDownloadURL(task.snapshot.ref), size: file.size })
+            done++
+            resolve()
+          },
+        )
+      })
+    }
+
+    onChange([...files, ...uploaded])
+    setUploading(false)
+  }
+
+  return (
+    <div className="space-y-3">
+      {files.length > 0 && (
+        <ul className="space-y-2">
+          {files.map((f, i) => (
+            <li
+              key={i}
+              className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg
+                         bg-gray-50 border border-gray-200"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="text-sm text-gray-800 truncate">{f.name}</span>
+                <span className="text-xs text-gray-400 shrink-0" style={{ fontFamily: 'var(--font-mono)' }}>
+                  {formatBytes(f.size)}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onChange(files.filter((_, idx) => idx !== i))}
+                className="text-gray-400 hover:text-red-500 text-lg leading-none px-1 shrink-0"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {uploading ? (
+        <div className="space-y-1">
+          <p className="text-sm text-gray-600">Uploading… {progress}%</p>
+          <div className="w-full bg-gray-200 rounded-full h-1.5">
+            <div
+              className="h-1.5 rounded-full transition-all"
+              style={{ width: `${progress}%`, background: 'var(--color-primary)' }}
+            />
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-dashed
+                     border-gray-300 text-sm text-gray-600 hover:border-gray-400 hover:text-gray-700
+                     transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add files
+        </button>
+      )}
+
+      <p className="text-xs text-gray-400" style={{ fontFamily: 'var(--font-mono)' }}>
+        {formatBytes(totalSize)} / 20 MB used
+      </p>
+
+      {error && <p className="text-xs text-red-600">{error}</p>}
+
+      <input ref={fileRef} type="file" multiple className="hidden" onChange={handleFiles} />
+    </div>
   )
 }
 
@@ -313,7 +523,6 @@ function DesignReferencePicker({
 
   return (
     <div>
-      {/* Selected chips */}
       {selectedDesigns.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
           {selectedDesigns.map((d) => (
@@ -335,7 +544,6 @@ function DesignReferencePicker({
         </div>
       )}
 
-      {/* Search input */}
       <div className="relative" ref={containerRef}>
         <input
           type="text"
@@ -348,9 +556,7 @@ function DesignReferencePicker({
         {open && (
           <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-white border border-gray-200
                           rounded-xl shadow-lg overflow-hidden max-h-56 overflow-y-auto">
-            {loading && (
-              <p className="px-3 py-2 text-xs text-gray-400">Loading…</p>
-            )}
+            {loading && <p className="px-3 py-2 text-xs text-gray-400">Loading…</p>}
             {!loading && filtered.length === 0 && (
               <p className="px-3 py-2 text-xs text-gray-400">No matching designs.</p>
             )}
@@ -406,8 +612,6 @@ function CoauthorsDrawer({
     return () => document.removeEventListener('keydown', handleKey)
   }, [onClose])
 
-  // Build the display list: collaborators + inject the current user if they are
-  // a co-author but not already present in the collaborators list.
   const displayList = useMemo(() => {
     const list: Array<{ uid: string; displayName: string; affiliation: string | null }> =
       collaborators.map((c) => ({ uid: c.uid, displayName: c.displayName, affiliation: c.affiliation }))
@@ -567,7 +771,6 @@ function CoauthorsPicker({
 
   return (
     <div>
-      {/* Selected chips — read-only; manage from the drawer */}
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
           {selected.map((c) => (
@@ -605,14 +808,11 @@ function CoauthorsPicker({
         />
       )}
 
-      {/* Confirm-removal modal — rendered outside the drawer to avoid z-index conflicts */}
       {pendingRemoval && (
         <>
           <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setPendingRemoval(null)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <div
-              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 pointer-events-auto"
-            >
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 pointer-events-auto">
               <h3 className="font-semibold text-base mb-2" style={{ color: 'var(--color-dark)' }}>
                 Remove co-author?
               </h3>
@@ -662,7 +862,6 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
     onChange({ ...values, [key]: val })
   }
 
-  // ── Methodology steps ──────────────────────────────────────────────────────
   function addStep() {
     set('steps', [...values.steps, { step_number: values.steps.length + 1, instruction: '' }])
   }
@@ -676,7 +875,6 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
     set('steps', values.steps.map((s, idx) => (idx === i ? { ...s, instruction } : s)))
   }
 
-  // ── Research questions ─────────────────────────────────────────────────────
   function addQuestion() {
     set('research_questions', [
       ...values.research_questions,
@@ -693,7 +891,6 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
     )
   }
 
-  // ── Materials ──────────────────────────────────────────────────────────────
   const selectedMaterialIds = useMemo(
     () => new Set(values.materials.map((m) => m.id)),
     [values.materials],
@@ -711,7 +908,6 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
     set('materials', values.materials.filter((e) => e.id !== m.id))
   }
 
-  // ── Reference experiments ──────────────────────────────────────────────────
   function addReference(id: string) {
     if (values.reference_experiment_ids.includes(id)) return
     set('reference_experiment_ids', [...values.reference_experiment_ids, id])
@@ -721,7 +917,7 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {lockedMethodology && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
           This design has been executed. Methodology fields (steps, variables, research questions,
@@ -729,197 +925,222 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
         </div>
       )}
 
-      {/* ── 1. Title ─────────────────────────────────────────────────────── */}
-      <div>
-        <FieldLabel label="Title" required />
-        <input
-          type="text"
-          required
-          value={values.title}
-          onChange={(e) => set('title', e.target.value)}
-          className="w-full input-sm"
-        />
-      </div>
+      {/* ── Card 1: Basic fields (no header) ──────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
 
-      {/* ── 2. Summary ───────────────────────────────────────────────────── */}
-      <div>
-        <FieldLabel label="Summary" required />
-        <textarea
-          required
-          rows={2}
-          value={values.summary}
-          onChange={(e) => set('summary', e.target.value)}
-          placeholder="A brief overview of what this experiment is about and what you hope to learn."
-          className="w-full input-sm resize-y"
-        />
-      </div>
-
-      {/* ── 3. Discipline tags + Difficulty ──────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Title */}
         <div>
-          <FieldLabel label="Discipline tags" required />
+          <FieldLabel label="Title" required />
           <input
             type="text"
             required
-            value={values.discipline_tags}
-            onChange={(e) => set('discipline_tags', e.target.value)}
-            placeholder="biology, ecology  (comma-separated)"
+            value={values.title}
+            onChange={(e) => set('title', e.target.value)}
             className="w-full input-sm"
           />
         </div>
+
+        {/* Summary */}
         <div>
-          <FieldLabel label="Difficulty level" required />
-          <select
-            value={values.difficulty_level}
-            onChange={(e) => set('difficulty_level', e.target.value as DifficultyLevel)}
-            className="w-full input-sm"
-          >
-            {DIFFICULTY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
+          <FieldLabel label="Summary" required />
+          <textarea
+            required
+            rows={2}
+            value={values.summary}
+            onChange={(e) => set('summary', e.target.value)}
+            placeholder="A brief overview of what this experiment is about and what you hope to learn."
+            className="w-full input-sm resize-y"
+          />
+        </div>
+
+        {/* Discipline tags + Difficulty */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <FieldLabel label="Discipline tags" required />
+            <input
+              type="text"
+              required
+              value={values.discipline_tags}
+              onChange={(e) => set('discipline_tags', e.target.value)}
+              placeholder="biology, ecology  (comma-separated)"
+              className="w-full input-sm"
+            />
+          </div>
+          <div>
+            <FieldLabel label="Difficulty level" required />
+            <select
+              value={values.difficulty_level}
+              onChange={(e) => set('difficulty_level', e.target.value as DifficultyLevel)}
+              className="w-full input-sm"
+            >
+              {DIFFICULTY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Materials */}
+        <div>
+          <FieldLabel label="Materials" required />
+          {values.materials.length > 0 && (
+            <ul className="mb-3 space-y-1.5">
+              {values.materials.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg
+                             bg-gray-50 border border-gray-200 text-sm text-gray-800"
+                >
+                  <span>{m.name}</span>
+                  {!lockedMethodology && (
+                    <button
+                      type="button"
+                      onClick={() => set('materials', values.materials.filter((e) => e.id !== m.id))}
+                      className="text-gray-400 hover:text-red-500 text-lg leading-none px-1 shrink-0"
+                    >
+                      ×
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {!lockedMethodology && (
+            <button
+              type="button"
+              onClick={() => setShowMaterialsDrawer(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-dashed
+                         border-gray-300 text-sm text-gray-600 hover:border-brand-400
+                         hover:text-brand-600 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Materials
+            </button>
+          )}
+        </div>
+
+        {/* Methodology */}
+        <div>
+          <FieldLabel label="Methodology" required />
+          {values.steps.map((step, i) => (
+            <div key={i} className="flex gap-2 mb-2">
+              <span className="shrink-0 w-6 text-sm text-gray-400 pt-2">{step.step_number}.</span>
+              <textarea
+                rows={2}
+                required={i === 0}
+                value={step.instruction}
+                disabled={lockedMethodology}
+                onChange={(e) => updateStep(i, e.target.value)}
+                placeholder={`Step ${step.step_number}`}
+                className="flex-1 input-sm resize-y"
+              />
+              {!lockedMethodology && values.steps.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeStep(i)}
+                  className="text-gray-400 hover:text-red-500 text-lg leading-none px-1"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+          {!lockedMethodology && (
+            <button type="button" onClick={addStep} className="text-sm text-brand-600 hover:underline">
+              + Add step
+            </button>
+          )}
+        </div>
+
+        {/* Outcomes / Research questions */}
+        <div>
+          <FieldLabel label="Outcomes / Research Questions" required />
+          {values.research_questions.map((q, i) => (
+            <div key={i} className="flex gap-2 mb-2">
+              <input
+                type="text"
+                required={i === 0}
+                value={q.question}
+                disabled={lockedMethodology}
+                onChange={(e) => updateQuestion(i, 'question', e.target.value)}
+                placeholder="Outcome or research question"
+                className="flex-1 input-sm"
+              />
+              <select
+                value={q.expected_data_type}
+                disabled={lockedMethodology}
+                onChange={(e) => updateQuestion(i, 'expected_data_type', e.target.value)}
+                className="input-sm w-36"
+              >
+                {(['numeric', 'categorical', 'image', 'text', 'other'] as DataType[]).map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              {!lockedMethodology && values.research_questions.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeQuestion(i)}
+                  className="text-gray-400 hover:text-red-500 text-lg leading-none px-1"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+          {!lockedMethodology && (
+            <button type="button" onClick={addQuestion} className="text-sm text-brand-600 hover:underline">
+              + Add outcome
+            </button>
+          )}
+        </div>
+
+        {/* Safety considerations */}
+        <div>
+          <FieldLabel label="Safety Considerations" />
+          <textarea
+            rows={2}
+            value={values.safety_considerations}
+            onChange={(e) => set('safety_considerations', e.target.value)}
+            placeholder="Any safety notes, required PPE, hazards, or supervision requirements."
+            className="w-full input-sm resize-y"
+          />
+        </div>
+
+        {/* Cover image */}
+        <div>
+          <FieldLabel label="Cover Image" />
+          <CoverImageUpload
+            value={values.cover_image_url}
+            onChange={(url) => set('cover_image_url', url)}
+          />
+        </div>
+
+      </div>
+
+      {/* ── Card 2: Design Files ──────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-700">Design Files</h3>
+        </div>
+        <div className="p-6">
+          <DesignFilesUpload
+            files={values.design_files}
+            onChange={(f) => set('design_files', f)}
+          />
         </div>
       </div>
 
-      {/* ── 4. Materials ─────────────────────────────────────────────────── */}
-      <div>
-        <FieldLabel label="Materials" required />
-
-        {/* Selected materials list */}
-        {values.materials.length > 0 && (
-          <ul className="mb-3 space-y-1.5">
-            {values.materials.map((m) => (
-              <li
-                key={m.id}
-                className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg
-                           bg-gray-50 border border-gray-200 text-sm text-gray-800"
-              >
-                <span>{m.name}</span>
-                {!lockedMethodology && (
-                  <button
-                    type="button"
-                    onClick={() => set('materials', values.materials.filter((e) => e.id !== m.id))}
-                    className="text-gray-400 hover:text-red-500 text-lg leading-none px-1 shrink-0"
-                  >
-                    ×
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {!lockedMethodology && (
-          <button
-            type="button"
-            onClick={() => setShowMaterialsDrawer(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-dashed
-                       border-gray-300 text-sm text-gray-600 hover:border-brand-400
-                       hover:text-brand-600 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Materials
-          </button>
-        )}
-      </div>
-
-      {/* ── 5. Methodology ───────────────────────────────────────────────── */}
-      <div>
-        <FieldLabel label="Methodology" required />
-        {values.steps.map((step, i) => (
-          <div key={i} className="flex gap-2 mb-2">
-            <span className="shrink-0 w-6 text-sm text-gray-400 pt-2">{step.step_number}.</span>
-            <textarea
-              rows={2}
-              required={i === 0}
-              value={step.instruction}
-              disabled={lockedMethodology}
-              onChange={(e) => updateStep(i, e.target.value)}
-              placeholder={`Step ${step.step_number}`}
-              className="flex-1 input-sm resize-y"
-            />
-            {!lockedMethodology && values.steps.length > 1 && (
-              <button
-                type="button"
-                onClick={() => removeStep(i)}
-                className="text-gray-400 hover:text-red-500 text-lg leading-none px-1"
-              >
-                ×
-              </button>
-            )}
-          </div>
-        ))}
-        {!lockedMethodology && (
-          <button type="button" onClick={addStep} className="text-sm text-brand-600 hover:underline">
-            + Add step
-          </button>
-        )}
-      </div>
-
-      {/* ── 6. Outcomes / Research questions ─────────────────────────────── */}
-      <div>
-        <FieldLabel label="Outcomes / Research Questions" required />
-        {values.research_questions.map((q, i) => (
-          <div key={i} className="flex gap-2 mb-2">
-            <input
-              type="text"
-              required={i === 0}
-              value={q.question}
-              disabled={lockedMethodology}
-              onChange={(e) => updateQuestion(i, 'question', e.target.value)}
-              placeholder="Outcome or research question"
-              className="flex-1 input-sm"
-            />
-            <select
-              value={q.expected_data_type}
-              disabled={lockedMethodology}
-              onChange={(e) => updateQuestion(i, 'expected_data_type', e.target.value)}
-              className="input-sm w-36"
-            >
-              {(['numeric', 'categorical', 'image', 'text', 'other'] as DataType[]).map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-            {!lockedMethodology && values.research_questions.length > 1 && (
-              <button
-                type="button"
-                onClick={() => removeQuestion(i)}
-                className="text-gray-400 hover:text-red-500 text-lg leading-none px-1"
-              >
-                ×
-              </button>
-            )}
-          </div>
-        ))}
-        {!lockedMethodology && (
-          <button type="button" onClick={addQuestion} className="text-sm text-brand-600 hover:underline">
-            + Add outcome
-          </button>
-        )}
-      </div>
-
-      {/* ── 7. Safety considerations (optional, stays in main section) ────── */}
-      <div>
-        <FieldLabel label="Safety Considerations" />
-        <textarea
-          rows={2}
-          value={values.safety_considerations}
-          onChange={(e) => set('safety_considerations', e.target.value)}
-          placeholder="Any safety notes, required PPE, hazards, or supervision requirements."
-          className="w-full input-sm resize-y"
-        />
-      </div>
-
-      {/* ── Advanced Details (collapsible) ────────────────────────────────── */}
-      <div>
+      {/* ── Card 3: Advanced Details (collapsible) ────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <button
           type="button"
           onClick={() => setAdvancedOpen((o) => !o)}
-          className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-widest mt-5 hover:text-gray-600 transition-colors"
+          className="w-full flex items-center justify-between px-6 py-4 text-left
+                     hover:bg-gray-50 transition-colors"
         >
-          Advanced Details
+          <h3 className="text-sm font-semibold text-gray-700">Advanced Details</h3>
           <svg
-            className={`w-3 h-3 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-gray-400 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
             fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
@@ -927,9 +1148,8 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
         </button>
 
         {advancedOpen && (
-          <div className="space-y-5 mt-3">
+          <div className="px-6 pb-6 border-t border-gray-100 space-y-5 pt-5">
 
-            {/* ── Attribution ─────────────────────────────────────────────── */}
             <SubHeader>Attribution</SubHeader>
 
             <div>
@@ -952,7 +1172,7 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
             <div>
               <FieldLabel
                 label="Reference Experiments"
-                tooltip={'Link other Replic designs that directly inspired or informed this one. Example: if you\'re adapting the "Yeast Fermentation Rate" design, find and add it here.'}
+                tooltip={'Link other Replic designs that directly inspired or informed this one.'}
               />
               <DesignReferencePicker
                 selectedIds={values.reference_experiment_ids}
@@ -961,7 +1181,6 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
               />
             </div>
 
-            {/* ── Scientific Methodology ───────────────────────────────────── */}
             <SubHeader>Scientific Methodology</SubHeader>
 
             <div>
@@ -1015,47 +1234,18 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
               />
             </div>
 
-            {/* ── Collaboration ────────────────────────────────────────────── */}
             <SubHeader>Collaboration</SubHeader>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <FieldLabel label="Sample size" />
-                <input
-                  type="number"
-                  min={1}
-                  value={values.sample_size}
-                  onChange={(e) => set('sample_size', e.target.value)}
-                  className="w-full input-sm"
-                />
-              </div>
-              <div className="flex items-center gap-3 pt-5">
-                <input
-                  id="collab"
-                  type="checkbox"
-                  checked={values.seeking_collaborators}
-                  onChange={(e) => set('seeking_collaborators', e.target.checked)}
-                  className="w-4 h-4 text-brand-600"
-                />
-                <label htmlFor="collab" className="text-sm font-medium text-gray-700">
-                  Seeking collaborators
-                </label>
-              </div>
+            <div>
+              <FieldLabel label="Collaboration notes" />
+              <textarea
+                rows={2}
+                value={values.collaboration_notes}
+                onChange={(e) => set('collaboration_notes', e.target.value)}
+                className="w-full input-sm resize-y"
+              />
             </div>
 
-            {values.seeking_collaborators && (
-              <div>
-                <FieldLabel label="Collaboration notes" />
-                <textarea
-                  rows={2}
-                  value={values.collaboration_notes}
-                  onChange={(e) => set('collaboration_notes', e.target.value)}
-                  className="w-full input-sm resize-y"
-                />
-              </div>
-            )}
-
-            {/* ── Compliance & Ethics ──────────────────────────────────────── */}
             <SubHeader>Compliance &amp; Ethics</SubHeader>
 
             <div>
@@ -1083,6 +1273,7 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
                 className="w-full input-sm resize-y"
               />
             </div>
+
           </div>
         )}
       </div>

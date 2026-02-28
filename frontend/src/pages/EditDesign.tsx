@@ -81,12 +81,12 @@ function designToFormValues(d: Design): DesignFormValues {
     independent_variables: d.independent_variables ?? [],
     dependent_variables: d.dependent_variables ?? [],
     controlled_variables: d.controlled_variables ?? [],
-    sample_size: d.sample_size != null ? String(d.sample_size) : '',
     analysis_plan: d.analysis_plan ?? '',
-    seeking_collaborators: d.seeking_collaborators,
     collaboration_notes: d.collaboration_notes ?? '',
     ethical_considerations: d.ethical_considerations ?? '',
     disclaimers: d.disclaimers ?? '',
+    cover_image_url: d.cover_image_url ?? '',
+    design_files: d.design_files ?? [],
     // Placeholder uids; loadCoauthorDetails() will fill in display names.
     coauthors: (d.coauthor_uids ?? []).map((uid) => ({ uid, displayName: uid })),
   }

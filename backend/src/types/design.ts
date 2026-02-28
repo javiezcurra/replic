@@ -27,6 +27,12 @@ export type RiskLevel = 'none' | 'low' | 'moderate' | 'high'
 
 // ─── Sub-document types ───────────────────────────────────────────────────────
 
+export interface DesignFile {
+  name: string
+  url: string
+  size: number  // bytes
+}
+
 export interface DesignStep {
   step_number: number
   instruction: string
@@ -106,6 +112,10 @@ export interface Design {
   dependent_variables: Variable[]
   controlled_variables: Variable[]
 
+  // Media & files
+  cover_image_url?: string
+  design_files: DesignFile[]
+
   // Optional advanced fields
   safety_considerations?: string
   reference_experiment_ids: string[]
@@ -177,6 +187,8 @@ export interface CreateDesignBody {
   seeking_collaborators?: boolean
   collaboration_notes?: string
   coauthor_uids?: string[]
+  cover_image_url?: string
+  design_files?: DesignFile[]
 }
 
 // All CreateDesignBody fields are optional for updates; pending_changelog is edit-only

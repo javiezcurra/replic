@@ -162,6 +162,8 @@ export async function createDesign(
       seeking_collaborators: body.seeking_collaborators ?? false,
       collaboration_notes: body.collaboration_notes,
       coauthor_uids: body.coauthor_uids ?? [],
+      cover_image_url: body.cover_image_url ?? '',
+      design_files: body.design_files ?? [],
       // System-managed
       status: 'draft',
       is_public: false,
