@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
 import type { Design, DifficultyLevel, DesignListResponse } from '../types/design'
 import UserDisplayName from '../components/UserDisplayName'
+
+interface LabMatches {
+  full: Design[]
+  partial: Design[]
+}
 
 const DIFFICULTY_OPTIONS: DifficultyLevel[] = [
   'Pre-K', 'Elementary', 'Middle School', 'High School',
@@ -10,12 +16,17 @@ const DIFFICULTY_OPTIONS: DifficultyLevel[] = [
 ]
 
 export default function Experiments() {
+  const { user } = useAuth()
+
   const [designs, setDesigns] = useState<Design[]>([])
   const [cursor, setCursor] = useState<string | undefined>()
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [discipline, setDiscipline] = useState('')
   const [difficulty, setDifficulty] = useState('')
+
+  const [labMatches, setLabMatches] = useState<LabMatches>({ full: [], partial: [] })
+  const [loadingMatches, setLoadingMatches] = useState(false)
 
   function buildQuery(after?: string) {
     const params = new URLSearchParams()
@@ -53,12 +64,88 @@ export default function Experiments() {
     fetchDesigns()
   }, [discipline, difficulty])
 
+  // Fetch lab-matched designs once on mount (logged-in users only)
+  useEffect(() => {
+    if (!user) return
+    setLoadingMatches(true)
+    api
+      .get<{ status: string; data: LabMatches }>('/api/lab/matches')
+      .then(({ data }) => setLabMatches(data))
+      .catch(() => {}) // silently ignore — feature is additive
+      .finally(() => setLoadingMatches(false))
+  }, [user?.uid])
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Experiments</h1>
         <p className="mt-2 text-gray-600">Browse reproducible scientific experiment designs.</p>
       </div>
+
+      {/* ── Lab-matched discovery (logged-in users only) ── */}
+      {user && (loadingMatches || labMatches.full.length > 0 || labMatches.partial.length > 0) && (
+        <section className="mb-8 rounded-2xl border border-gray-100 p-5"
+          style={{ background: 'var(--color-surface)' }}>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-base">🔬</span>
+            <h2 className="text-sm font-bold uppercase tracking-wider"
+              style={{ color: 'var(--color-dark)' }}>
+              From Your Lab Inventory
+            </h2>
+          </div>
+
+          {loadingMatches ? (
+            <div className="flex items-center gap-2 text-sm py-2"
+              style={{ color: 'var(--color-text-muted)' }}>
+              <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }} />
+              Checking your lab inventory…
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Full matches — user has every piece of equipment */}
+              {labMatches.full.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                    <span className="text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--color-text-muted)' }}>
+                      Ready to run — you have all the equipment
+                    </span>
+                    <span className="text-xs font-mono px-1.5 py-0.5 rounded"
+                      style={{ background: 'var(--color-accent)', color: 'var(--color-text)' }}>
+                      {labMatches.full.length}
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {labMatches.full.map((d) => <DesignCard key={d.id} design={d} />)}
+                  </div>
+                </div>
+              )}
+
+              {/* Partial matches — user has some equipment */}
+              {labMatches.partial.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                    <span className="text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--color-text-muted)' }}>
+                      You have some of the equipment
+                    </span>
+                    <span className="text-xs font-mono px-1.5 py-0.5 rounded"
+                      style={{ background: 'var(--color-accent)', color: 'var(--color-text)' }}>
+                      {labMatches.partial.length}
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {labMatches.partial.map((d) => <DesignCard key={d.id} design={d} />)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-6">
