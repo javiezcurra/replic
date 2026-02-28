@@ -28,7 +28,7 @@ function notFoundErr(): AppError {
 
 // ─── GET /api/admin/bundles ───────────────────────────────────────────────────
 export async function listBundles(
-  req: Request,
+  _req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> {
