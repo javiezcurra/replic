@@ -107,7 +107,7 @@ export async function makeAdmin(
     createNotification(uid, {
       type: 'admin_granted',
       message: 'You have been granted Admin privileges on Replic.',
-      link: '/profile',
+      link: '/admin/users',
     })
 
     res.json({ status: 'ok' })
