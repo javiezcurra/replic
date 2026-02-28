@@ -11,6 +11,7 @@ import { useCategories } from '../hooks/useCategories'
 import BulkUploadMaterialsModal from '../components/BulkUploadMaterialsModal'
 import CreateMaterialModal from '../components/CreateMaterialModal'
 import ManageCategoriesModal from '../components/ManageCategoriesModal'
+import ManageBundlesModal from '../components/ManageBundlesModal'
 import MaterialCard from '../components/MaterialCard'
 import MaterialDetailModal from '../components/MaterialDetailModal'
 
@@ -31,6 +32,7 @@ export default function Materials() {
   const [showBulkUpload, setShowBulkUpload] = useState(false)
   const [showCreateMaterial, setShowCreateMaterial] = useState(false)
   const [showManageCategories, setShowManageCategories] = useState(false)
+  const [showManageBundles, setShowManageBundles] = useState(false)
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
 
   async function fetchAll() {
@@ -156,6 +158,19 @@ export default function Materials() {
               Edit categories
             </button>
             <button
+              onClick={() => setShowManageBundles(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl
+                         border-2 border-surface-2 text-ink text-sm font-semibold
+                         hover:border-ink transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14
+                     0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              Bundles
+            </button>
+            <button
               onClick={() => setShowBulkUpload(true)}
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl
                          border-2 border-plum text-plum text-sm font-semibold
@@ -276,6 +291,10 @@ export default function Materials() {
           onClose={() => setShowManageCategories(false)}
           onChange={setCategories}
         />
+      )}
+
+      {showManageBundles && (
+        <ManageBundlesModal onClose={() => setShowManageBundles(false)} />
       )}
 
       {selectedMaterial && (
