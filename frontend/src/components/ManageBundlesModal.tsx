@@ -2,6 +2,11 @@
  * ManageBundlesModal — Admin UI for creating and editing material Bundles.
  * Bundles are named collections of materials (e.g. "Household Items").
  * They're used by the platform to adjust experiment-matching logic.
+ *
+ * Usage modes:
+ *  - Full modal (no initialEditing): shows list of bundles, can navigate to editor.
+ *  - Editor-only (initialEditing provided): opens directly in edit mode; calls
+ *    onSaved(bundle) + onClose() after saving; Cancel calls onClose().
  */
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api'
@@ -12,6 +17,44 @@ import type { Material } from '../types/material'
 
 interface BundleListResponse { status: string; data: Bundle[] }
 interface MaterialListResponse { status: string; data: Material[] }
+
+// ─── MaterialRow ──────────────────────────────────────────────────────────────
+
+function MaterialRow({
+  material,
+  checked,
+  onToggle,
+}: {
+  material: Material
+  checked: boolean
+  onToggle: (id: string) => void
+}) {
+  return (
+    <label
+      className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50
+                 transition-colors border-b border-gray-50 last:border-0"
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onToggle(material.id)}
+        className="w-4 h-4 rounded accent-primary shrink-0"
+      />
+      <span className="text-sm flex-1 min-w-0 truncate" style={{ color: 'var(--color-text)' }}>
+        {material.name}
+      </span>
+      <span
+        className="text-xs shrink-0 px-1.5 py-0.5 rounded"
+        style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
+      >
+        {material.type === 'Equipment' ? 'Eq' : 'Con'}
+      </span>
+      {material.is_verified && (
+        <span className="text-xs shrink-0" style={{ color: 'var(--color-text-muted)' }}>✓</span>
+      )}
+    </label>
+  )
+}
 
 // ─── BundleEditor ─────────────────────────────────────────────────────────────
 
@@ -33,19 +76,24 @@ function BundleEditor({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(isNew ? [] : bundle.material_ids),
   )
-  const [search, setSearch]   = useState('')
-  const [saving, setSaving]   = useState(false)
-  const [error, setError]     = useState('')
+  // Track IDs that were in the bundle when the editor opened — used for sort order only
+  const [initialIds] = useState<Set<string>>(
+    new Set(isNew ? [] : bundle.material_ids),
+  )
+  const [search, setSearch] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState('')
 
-  const filtered = useMemo(() => {
+  // Flat sorted list: initial bundle members first (alpha), then the rest (alpha)
+  const sortedMaterials = useMemo(() => {
     const q = search.toLowerCase().trim()
-    if (!q) return allMaterials
-    return allMaterials.filter((m) => m.name.toLowerCase().includes(q))
-  }, [allMaterials, search])
-
-  // Group for display
-  const equipment   = filtered.filter((m) => m.type === 'Equipment')
-  const consumables = filtered.filter((m) => m.type === 'Consumable')
+    const mats = q
+      ? allMaterials.filter((m) => m.name.toLowerCase().includes(q))
+      : allMaterials
+    const inBundle    = mats.filter((m) =>  initialIds.has(m.id)).sort((a, b) => a.name.localeCompare(b.name))
+    const notInBundle = mats.filter((m) => !initialIds.has(m.id)).sort((a, b) => a.name.localeCompare(b.name))
+    return { inBundle, notInBundle }
+  }, [allMaterials, search, initialIds])
 
   function toggle(id: string) {
     setSelectedIds((prev) => {
@@ -66,20 +114,27 @@ function BundleEditor({
         description:  description.trim(),
         material_ids: [...selectedIds],
       }
+      let saved: Bundle
       if (isNew) {
         const res = await api.post<{ status: string; data: Bundle }>('/api/admin/bundles', payload)
-        onSave(res.data)
+        saved = res.data
       } else {
         const res = await api.patch<{ status: string; data: Bundle }>(
           `/api/admin/bundles/${bundle.id}`, payload,
         )
-        onSave(res.data)
+        saved = res.data
       }
+      onSave(saved)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save bundle.')
       setSaving(false)
     }
   }
+
+  const { inBundle, notInBundle } = sortedMaterials
+  const hasInBundle    = inBundle.length > 0
+  const hasNotInBundle = notInBundle.length > 0
+  const isEmpty        = !hasInBundle && !hasNotInBundle
 
   return (
     <div className="flex flex-col h-full">
@@ -104,8 +159,10 @@ function BundleEditor({
 
         {/* Name */}
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5"
-            style={{ color: 'var(--color-text-muted)' }}>
+          <label
+            className="block text-xs font-semibold uppercase tracking-wider mb-1.5"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
             Bundle Name
           </label>
           <input
@@ -119,9 +176,12 @@ function BundleEditor({
 
         {/* Description */}
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5"
-            style={{ color: 'var(--color-text-muted)' }}>
-            Description <span className="font-normal normal-case tracking-normal">(optional)</span>
+          <label
+            className="block text-xs font-semibold uppercase tracking-wider mb-1.5"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            Description{' '}
+            <span className="font-normal normal-case tracking-normal">(optional)</span>
           </label>
           <textarea
             rows={2}
@@ -135,20 +195,26 @@ function BundleEditor({
         {/* Material picker */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-semibold uppercase tracking-wider"
-              style={{ color: 'var(--color-text-muted)' }}>
+            <label
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
               Materials
             </label>
-            <span className="text-xs font-mono px-1.5 py-0.5 rounded"
-              style={{ background: 'var(--color-accent)', color: 'var(--color-text)' }}>
+            <span
+              className="text-xs font-mono px-1.5 py-0.5 rounded"
+              style={{ background: 'var(--color-accent)', color: 'var(--color-text)' }}
+            >
               {selectedIds.size} selected
             </span>
           </div>
 
           {/* Search */}
           <div className="relative mb-3">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-400"
-              fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-400"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
@@ -161,34 +227,59 @@ function BundleEditor({
             />
           </div>
 
-          {/* Material list */}
+          {/* Flat sorted material list */}
           <div className="border border-gray-100 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
             {allMaterials.length === 0 ? (
               <p className="text-sm text-center py-6" style={{ color: 'var(--color-text-muted)' }}>
                 No materials found.
               </p>
-            ) : filtered.length === 0 ? (
+            ) : isEmpty ? (
               <p className="text-sm text-center py-6" style={{ color: 'var(--color-text-muted)' }}>
                 No materials match "{search}".
               </p>
             ) : (
               <>
-                {equipment.length > 0 && (
-                  <MaterialGroup
-                    label="Equipment"
-                    materials={equipment}
-                    selectedIds={selectedIds}
+                {/* Bundle members — shown first */}
+                {hasInBundle && (
+                  <>
+                    {!isNew && !search && (
+                      <div
+                        className="px-4 py-2 text-xs font-semibold uppercase tracking-wider border-b border-gray-50"
+                        style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
+                      >
+                        In this bundle
+                      </div>
+                    )}
+                    {inBundle.map((m) => (
+                      <MaterialRow
+                        key={m.id}
+                        material={m}
+                        checked={selectedIds.has(m.id)}
+                        onToggle={toggle}
+                      />
+                    ))}
+                  </>
+                )}
+
+                {/* Divider between in-bundle and other materials */}
+                {hasInBundle && hasNotInBundle && !search && (
+                  <div
+                    className="px-4 py-2 text-xs font-semibold uppercase tracking-wider border-b border-gray-50"
+                    style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
+                  >
+                    Other materials
+                  </div>
+                )}
+
+                {/* Remaining materials */}
+                {notInBundle.map((m) => (
+                  <MaterialRow
+                    key={m.id}
+                    material={m}
+                    checked={selectedIds.has(m.id)}
                     onToggle={toggle}
                   />
-                )}
-                {consumables.length > 0 && (
-                  <MaterialGroup
-                    label="Consumables"
-                    materials={consumables}
-                    selectedIds={selectedIds}
-                    onToggle={toggle}
-                  />
-                )}
+                ))}
               </>
             )}
           </div>
@@ -225,88 +316,64 @@ function BundleEditor({
   )
 }
 
-function MaterialGroup({
-  label,
-  materials,
-  selectedIds,
-  onToggle,
-}: {
-  label: string
-  materials: Material[]
-  selectedIds: Set<string>
-  onToggle: (id: string) => void
-}) {
-  return (
-    <>
-      <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wider border-b border-gray-50"
-        style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}>
-        {label}
-      </div>
-      {materials.map((m) => {
-        const checked = selectedIds.has(m.id)
-        return (
-          <label
-            key={m.id}
-            className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50
-                       transition-colors border-b border-gray-50 last:border-0"
-          >
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={() => onToggle(m.id)}
-              className="w-4 h-4 rounded accent-primary shrink-0"
-            />
-            <span className="text-sm flex-1 min-w-0 truncate" style={{ color: 'var(--color-text)' }}>
-              {m.name}
-            </span>
-            {m.is_verified && (
-              <span className="text-xs shrink-0" style={{ color: 'var(--color-text-muted)' }}>✓</span>
-            )}
-          </label>
-        )
-      })}
-    </>
-  )
-}
-
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
-export default function ManageBundlesModal({ onClose }: { onClose: () => void }) {
-  const [bundles, setBundles]         = useState<Bundle[]>([])
+export default function ManageBundlesModal({
+  onClose,
+  initialEditing,
+  onSaved,
+}: {
+  onClose: () => void
+  initialEditing?: Bundle | 'new'
+  onSaved?: (b: Bundle) => void
+}) {
+  const isEditorOnly = initialEditing !== undefined
+
+  const [bundles, setBundles]           = useState<Bundle[]>([])
   const [allMaterials, setAllMaterials] = useState<Material[]>([])
-  const [loading, setLoading]         = useState(true)
-  const [editing, setEditing]         = useState<Bundle | 'new' | null>(null)
+  const [loading, setLoading]           = useState(true)
+  const [editing, setEditing]           = useState<Bundle | 'new' | null>(initialEditing ?? null)
   const [deleteTarget, setDeleteTarget] = useState<Bundle | null>(null)
-  const [deleting, setDeleting]       = useState(false)
+  const [deleting, setDeleting]         = useState(false)
 
   useEffect(() => {
     async function load() {
-      const [bundlesRes, eqRes, conRes] = await Promise.allSettled([
-        api.get<BundleListResponse>('/api/admin/bundles'),
+      const [eqRes, conRes] = await Promise.allSettled([
         api.get<MaterialListResponse>('/api/materials?type=Equipment&limit=100'),
         api.get<MaterialListResponse>('/api/materials?type=Consumable&limit=100'),
       ])
-      if (bundlesRes.status === 'fulfilled') setBundles(bundlesRes.value.data)
       const eq  = eqRes.status  === 'fulfilled' ? eqRes.value.data  : []
       const con = conRes.status === 'fulfilled' ? conRes.value.data : []
       setAllMaterials([...eq, ...con])
+
+      if (!isEditorOnly) {
+        const bundlesRes = await api.get<BundleListResponse>('/api/admin/bundles').catch(() => null)
+        if (bundlesRes) setBundles(bundlesRes.data)
+      }
+
       setLoading(false)
     }
     load()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Build a name → Material lookup for rendering bundle members
+  // Build material name lookup for rendering bundle member chips
   const materialById = useMemo(
     () => new Map(allMaterials.map((m) => [m.id, m])),
     [allMaterials],
   )
 
   function handleSaved(updated: Bundle) {
-    setBundles((prev) => {
-      const idx = prev.findIndex((b) => b.id === updated.id)
-      return idx === -1 ? [...prev, updated] : prev.map((b) => (b.id === updated.id ? updated : b))
-    })
-    setEditing(null)
+    if (isEditorOnly) {
+      onSaved?.(updated)
+      onClose()
+    } else {
+      setBundles((prev) => {
+        const idx = prev.findIndex((b) => b.id === updated.id)
+        return idx === -1 ? [...prev, updated] : prev.map((b) => (b.id === updated.id ? updated : b))
+      })
+      setEditing(null)
+      onSaved?.(updated)
+    }
   }
 
   async function confirmDelete() {
@@ -317,7 +384,7 @@ export default function ManageBundlesModal({ onClose }: { onClose: () => void })
       setBundles((prev) => prev.filter((b) => b.id !== deleteTarget.id))
       setDeleteTarget(null)
     } catch {
-      // leave modal open — error visible to admin via retry
+      // leave modal open for retry
     } finally {
       setDeleting(false)
     }
@@ -350,7 +417,7 @@ export default function ManageBundlesModal({ onClose }: { onClose: () => void })
               bundle={editing}
               allMaterials={allMaterials}
               onSave={handleSaved}
-              onCancel={() => setEditing(null)}
+              onCancel={isEditorOnly ? onClose : () => setEditing(null)}
             />
           ) : (
             /* ── List view ── */
@@ -407,99 +474,15 @@ export default function ManageBundlesModal({ onClose }: { onClose: () => void })
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {bundles.map((bundle) => {
-                      const members = bundle.material_ids
-                        .map((id) => materialById.get(id))
-                        .filter(Boolean) as Material[]
-                      const visible = members.slice(0, 6)
-                      const overflow = members.length - visible.length
-
-                      return (
-                        <div
-                          key={bundle.id}
-                          className="rounded-xl border border-gray-100 p-4"
-                          style={{ background: 'var(--color-surface)' }}
-                        >
-                          {/* Bundle title row */}
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <h3 className="font-semibold text-sm leading-snug"
-                                style={{ color: 'var(--color-dark)' }}>
-                                {bundle.name}
-                              </h3>
-                              {bundle.description && (
-                                <p className="text-xs mt-0.5 text-muted leading-relaxed">
-                                  {bundle.description}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-xs font-mono px-1.5 py-0.5 rounded"
-                                style={{ background: 'var(--color-accent)', color: 'var(--color-text)' }}>
-                                {bundle.material_ids.length}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setEditing(bundle)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700
-                                           hover:bg-gray-100 transition-colors"
-                                title="Edit bundle"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5
-                                       m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDeleteTarget(bundle)}
-                                className="p-1.5 rounded-lg text-gray-300 hover:text-red-500
-                                           hover:bg-red-50 transition-colors"
-                                title="Delete bundle"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858
-                                       L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Material chips */}
-                          {members.length > 0 && (
-                            <div className="mt-3 flex flex-wrap gap-1.5">
-                              {visible.map((m) => (
-                                <span
-                                  key={m.id}
-                                  className="text-xs px-2 py-0.5 rounded-full border border-gray-200 bg-white"
-                                  style={{ color: 'var(--color-text)' }}
-                                >
-                                  {m.name}
-                                </span>
-                              ))}
-                              {overflow > 0 && (
-                                <span className="text-xs px-2 py-0.5 rounded-full border border-gray-200 bg-white"
-                                  style={{ color: 'var(--color-text-muted)' }}>
-                                  +{overflow} more
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          {bundle.material_ids.length > 0 && members.length === 0 && (
-                            <p className="mt-2 text-xs italic" style={{ color: 'var(--color-text-muted)' }}>
-                              Materials loading…
-                            </p>
-                          )}
-                          {bundle.material_ids.length === 0 && (
-                            <p className="mt-2 text-xs italic" style={{ color: 'var(--color-text-muted)' }}>
-                              No materials added yet.
-                            </p>
-                          )}
-                        </div>
-                      )
-                    })}
+                    {bundles.map((bundle) => (
+                      <BundleCard
+                        key={bundle.id}
+                        bundle={bundle}
+                        materialById={materialById}
+                        onEdit={setEditing}
+                        onDelete={setDeleteTarget}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -545,5 +528,111 @@ export default function ManageBundlesModal({ onClose }: { onClose: () => void })
         </>
       )}
     </>
+  )
+}
+
+// ─── BundleCard ───────────────────────────────────────────────────────────────
+
+export function BundleCard({
+  bundle,
+  materialById,
+  onEdit,
+  onDelete,
+}: {
+  bundle: Bundle
+  materialById: Map<string, Material>
+  onEdit: (b: Bundle) => void
+  onDelete: (b: Bundle) => void
+}) {
+  const members = bundle.material_ids
+    .map((id) => materialById.get(id))
+    .filter(Boolean) as Material[]
+  const visible  = members.slice(0, 6)
+  const overflow = members.length - visible.length
+
+  return (
+    <div
+      className="rounded-xl border border-gray-100 p-4"
+      style={{ background: 'var(--color-surface)' }}
+    >
+      {/* Title row */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-semibold text-sm leading-snug" style={{ color: 'var(--color-dark)' }}>
+            {bundle.name}
+          </h3>
+          {bundle.description && (
+            <p className="text-xs mt-0.5 text-muted leading-relaxed">{bundle.description}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className="text-xs font-mono px-1.5 py-0.5 rounded"
+            style={{ background: 'var(--color-accent)', color: 'var(--color-text)' }}
+          >
+            {bundle.material_ids.length}
+          </span>
+          <button
+            type="button"
+            onClick={() => onEdit(bundle)}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700
+                       hover:bg-gray-100 transition-colors"
+            title="Edit bundle"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5
+                   m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(bundle)}
+            className="p-1.5 rounded-lg text-gray-300 hover:text-red-500
+                       hover:bg-red-50 transition-colors"
+            title="Delete bundle"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858
+                   L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Material chips */}
+      {members.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {visible.map((m) => (
+            <span
+              key={m.id}
+              className="text-xs px-2 py-0.5 rounded-full border border-gray-200 bg-white"
+              style={{ color: 'var(--color-text)' }}
+            >
+              {m.name}
+            </span>
+          ))}
+          {overflow > 0 && (
+            <span
+              className="text-xs px-2 py-0.5 rounded-full border border-gray-200 bg-white"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              +{overflow} more
+            </span>
+          )}
+        </div>
+      )}
+      {bundle.material_ids.length > 0 && members.length === 0 && (
+        <p className="mt-2 text-xs italic" style={{ color: 'var(--color-text-muted)' }}>
+          Materials loading…
+        </p>
+      )}
+      {bundle.material_ids.length === 0 && (
+        <p className="mt-2 text-xs italic" style={{ color: 'var(--color-text-muted)' }}>
+          No materials added yet.
+        </p>
+      )}
+    </div>
   )
 }
