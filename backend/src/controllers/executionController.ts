@@ -232,6 +232,44 @@ export async function updateExecution(
   }
 }
 
+// ─── GET /api/users/me/executions ────────────────────────────────────────────
+export async function listMyExecutions(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const uid = req.user!.uid
+
+    const [leadSnap, coSnap] = await Promise.all([
+      adminDb.collection(EXECUTIONS)
+        .where('experimenter_uid', '==', uid)
+        .where('status', '==', 'in_progress')
+        .get(),
+      adminDb.collection(EXECUTIONS)
+        .where('co_experimenter_uids', 'array-contains', uid)
+        .where('status', '==', 'in_progress')
+        .get(),
+    ])
+
+    const seen = new Set<string>()
+    const executions: ReturnType<typeof toResponse>[] = []
+    for (const doc of [...leadSnap.docs, ...coSnap.docs]) {
+      if (!seen.has(doc.id)) {
+        seen.add(doc.id)
+        executions.push(toResponse(doc.data() as Execution))
+      }
+    }
+    executions.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    )
+
+    res.json({ status: 'ok', data: executions })
+  } catch (err) {
+    next(err)
+  }
+}
+
 // ─── DELETE /api/executions/:id ──────────────────────────────────────────────
 export async function cancelExecution(
   req: Request,

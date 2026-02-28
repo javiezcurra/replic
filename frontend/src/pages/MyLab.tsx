@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
 import type { Design } from '../types/design'
+import type { Execution } from '../types/execution'
 import type { Material } from '../types/material'
 import type { CollaboratorEntry, UserPublicProfile } from '../types/user'
 import type { Notification } from '../types/notification'
@@ -35,6 +37,8 @@ interface LabStats {
 
 interface LabHubData {
   workbench: Design[]
+  runningExperiments: Execution[]
+  currentUid: string
   pipeline: PipelineEntry[]
   watchlist: WatchlistEntry[]
   published: Design[]
@@ -45,7 +49,9 @@ interface LabHubData {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MyLab() {
+  const { user } = useAuth()
   const [myDesigns, setMyDesigns] = useState<Design[]>([])
+  const [runningExperiments, setRunningExperiments] = useState<Execution[]>([])
   const [pipeline, setPipeline] = useState<PipelineEntry[]>([])
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([])
   const [collaborators, setCollaborators] = useState<CollaboratorEntry[]>([])
@@ -70,14 +76,16 @@ export default function MyLab() {
 
   useEffect(() => {
     async function fetchAll() {
-      const [designsRes, pipelineRes, watchlistRes, colsRes, labRes] = await Promise.allSettled([
+      const [designsRes, executionsRes, pipelineRes, watchlistRes, colsRes, labRes] = await Promise.allSettled([
         api.get<{ status: string; data: Design[] }>('/api/designs/me/list'),
+        api.get<{ status: string; data: Execution[] }>('/api/users/me/executions'),
         api.get<{ status: string; data: PipelineEntry[] }>('/api/users/me/pipeline'),
         api.get<{ status: string; data: WatchlistEntry[] }>('/api/users/me/watchlist'),
         api.get<{ status: string; data: CollaboratorEntry[] }>('/api/users/me/collaborators'),
         api.get<{ status: string; data: Material[] }>('/api/lab'),
       ])
       if (designsRes.status === 'fulfilled') setMyDesigns(designsRes.value.data)
+      if (executionsRes.status === 'fulfilled') setRunningExperiments(executionsRes.value.data)
       if (pipelineRes.status === 'fulfilled') setPipeline(pipelineRes.value.data)
       if (watchlistRes.status === 'fulfilled') setWatchlist(watchlistRes.value.data)
       if (colsRes.status === 'fulfilled') setCollaborators(colsRes.value.data)
@@ -87,7 +95,16 @@ export default function MyLab() {
     fetchAll()
   }, [])
 
-  const data: LabHubData = { workbench, pipeline, watchlist, published, collaborators, labStats }
+  const data: LabHubData = {
+    workbench,
+    runningExperiments,
+    currentUid: user?.uid ?? '',
+    pipeline,
+    watchlist,
+    published,
+    collaborators,
+    labStats,
+  }
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-surface)' }}>
@@ -291,6 +308,70 @@ function CompactEntryCard({ entry, watchlistSource }: {
   )
 }
 
+// ─── Running experiment card ──────────────────────────────────────────────────
+
+function RunningExperimentCard({ execution, currentUid }: {
+  execution: Execution
+  currentUid: string
+}) {
+  const isLead = execution.experimenter_uid === currentUid
+  const formattedDate = execution.start_date
+    ? new Date(execution.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—'
+
+  return (
+    <div
+      className="relative rounded-xl border border-gray-100 p-3.5 hover:shadow-sm transition-shadow"
+      style={{ background: 'var(--color-surface)' }}
+    >
+      <Link
+        to={`/executions/${execution.id}`}
+        className="absolute inset-0 rounded-xl"
+        aria-label={execution.design_title}
+      />
+
+      {/* Row 1: title + Running badge */}
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <h3 className="font-semibold text-sm leading-snug" style={{ color: 'var(--color-text)' }}>
+          {execution.design_title}
+        </h3>
+        <span
+          className="text-xs font-medium px-2 py-0.5 rounded-full shrink-0 text-white"
+          style={{ background: 'var(--color-primary)' }}
+        >
+          ▶ Running
+        </span>
+      </div>
+
+      {/* Row 2: version · started date · experimenter count */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs mb-2.5"
+        style={{ color: 'var(--color-text-muted)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)' }}>v{execution.design_version}</span>
+        <span className="text-gray-300">·</span>
+        <span>Started {formattedDate}</span>
+        {execution.co_experimenters.length > 0 && (
+          <>
+            <span className="text-gray-300">·</span>
+            <span>{execution.co_experimenters.length + 1} experimenters</span>
+          </>
+        )}
+      </div>
+
+      {/* Role badge */}
+      <span
+        className="inline-block text-xs font-medium px-2 py-0.5 rounded-full"
+        style={
+          isLead
+            ? { background: 'var(--color-dark)', color: 'white' }
+            : { background: 'var(--color-accent)', color: 'var(--color-text)' }
+        }
+      >
+        {isLead ? 'Lead experimenter' : 'Co-experimenter'}
+      </span>
+    </div>
+  )
+}
+
 // ─── Sidebar nav sections ─────────────────────────────────────────────────────
 
 const SIDEBAR_SECTIONS = [
@@ -362,7 +443,7 @@ function CommandCenter({ data }: { data: LabHubData }) {
   }
 
   const counts: Record<string, number> = {
-    workbench:       data.workbench.length,
+    workbench:       data.workbench.length + data.runningExperiments.length,
     pipeline:        data.pipeline.length,
     watchlist:       data.watchlist.length,
     published:       data.published.length,
@@ -476,17 +557,43 @@ function CommandCenter({ data }: { data: LabHubData }) {
           id="workbench"
           icon="🔧"
           title="Workbench"
-          count={data.workbench.length}
+          count={data.workbench.length + data.runningExperiments.length}
           accentColor="var(--color-dark)"
           actionButton={{ label: '+ New Design', to: '/designs/new' }}
         >
-          {data.workbench.length === 0 ? (
-            <EmptyMsg>No designs in progress.</EmptyMsg>
+          {data.runningExperiments.length === 0 && data.workbench.length === 0 ? (
+            <EmptyMsg>Nothing in progress.</EmptyMsg>
           ) : (
-            <div className="space-y-2">
-              {data.workbench.map((d) => (
-                <DesignCard key={d.id} design={d} compact />
-              ))}
+            <div className="space-y-4">
+              {/* Running experiments */}
+              {data.runningExperiments.length > 0 && (
+                <div className="space-y-2">
+                  {data.workbench.length > 0 && (
+                    <p className="text-xs font-semibold uppercase tracking-wider px-0.5"
+                      style={{ color: 'var(--color-text-muted)' }}>
+                      Running
+                    </p>
+                  )}
+                  {data.runningExperiments.map((e) => (
+                    <RunningExperimentCard key={e.id} execution={e} currentUid={data.currentUid} />
+                  ))}
+                </div>
+              )}
+
+              {/* Designs in progress */}
+              {data.workbench.length > 0 && (
+                <div className="space-y-2">
+                  {data.runningExperiments.length > 0 && (
+                    <p className="text-xs font-semibold uppercase tracking-wider px-0.5"
+                      style={{ color: 'var(--color-text-muted)' }}>
+                      Designs
+                    </p>
+                  )}
+                  {data.workbench.map((d) => (
+                    <DesignCard key={d.id} design={d} compact />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </SectionCard>

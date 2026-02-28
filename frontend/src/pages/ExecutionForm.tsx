@@ -394,6 +394,7 @@ export default function ExecutionForm() {
   const [deviations, setDeviations]           = useState('')
 
   // UI state
+  const [isEditing, setIsEditing]             = useState(false)
   const [saving, setSaving]                   = useState(false)
   const [saveSuccess, setSaveSuccess]         = useState(false)
   const [saveError, setSaveError]             = useState('')
@@ -453,6 +454,7 @@ export default function ExecutionForm() {
         },
       )
       setExecution(updated.data)
+      setIsEditing(false)
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
@@ -522,12 +524,18 @@ export default function ExecutionForm() {
   const isLead = user?.uid === execution.experimenter_uid
   const designTitle = design?.title ?? execution.design_title
 
+  const formattedStartDate = startDate
+    ? new Date(startDate + 'T12:00:00').toLocaleDateString('en-US', {
+        month: 'long', day: 'numeric', year: 'numeric',
+      })
+    : '—'
+
   return (
     <div className="max-w-6xl mx-auto py-8 px-4">
 
       {/* Breadcrumb */}
       <nav className="mb-6 flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-        <Link to="/experiments" className="hover:opacity-70 transition-opacity">Experiments</Link>
+        <Link to="/my-lab" className="hover:opacity-70 transition-opacity">My Lab</Link>
         <span>/</span>
         <Link
           to={`/designs/${execution.design_id}`}
@@ -540,120 +548,154 @@ export default function ExecutionForm() {
       </nav>
 
       {/* Page header */}
-      <header className="mb-8">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-display font-bold" style={{ color: 'var(--color-dark)' }}>
-            {designTitle}
-          </h1>
-          <span
-            className="text-xs font-medium px-2.5 py-1 rounded-full"
-            style={{ background: 'var(--color-accent)', color: 'var(--color-dark)' }}
-          >
-            In Progress
-          </span>
+      <header className="mb-8 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-display font-bold" style={{ color: 'var(--color-dark)' }}>
+              {designTitle}
+            </h1>
+            <span
+              className="text-xs font-medium px-2.5 py-1 rounded-full"
+              style={{ background: 'var(--color-accent)', color: 'var(--color-dark)' }}
+            >
+              In Progress
+            </span>
+          </div>
+          <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            Experiment run · Design v{execution.design_version}
+          </p>
         </div>
-        <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-          Experiment run · Design v{execution.design_version}
-        </p>
+
+        {/* Edit / Stop Editing toggle (lead only) */}
+        {isLead && !isEditing && (
+          <button
+            type="button"
+            onClick={() => setIsEditing(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
+                       border-2 transition-colors hover:opacity-90"
+            style={{ borderColor: 'var(--color-dark)', color: 'var(--color-dark)' }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Edit
+          </button>
+        )}
+        {isLead && isEditing && (
+          <button
+            type="button"
+            onClick={() => { setIsEditing(false); setSaveError('') }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
+                       border-2 transition-colors hover:bg-gray-50"
+            style={{ borderColor: 'var(--color-secondary)', color: 'var(--color-secondary)' }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Stop Editing
+          </button>
+        )}
       </header>
+
+      {/* Save success banner */}
+      {saveSuccess && (
+        <div className="mb-6 text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+          Changes saved successfully.
+        </div>
+      )}
 
       {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
         {/* ── Left: form (2/3) ── */}
         <div className="lg:col-span-2">
-          <form onSubmit={handleSave} className="space-y-6">
 
-            {/* Co-Experimenters */}
-            <div className="card p-6">
-              <label className="block text-sm font-semibold mb-1"
-                style={{ color: 'var(--color-text)' }}>
-                Co-Experimenters
-              </label>
-              <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
-                Add collaborators who are running this experiment with you.
-              </p>
-              {design && (
-                <CoExperimentersPicker
-                  selected={coExperimenters}
-                  leadUid={execution.experimenter_uid}
-                  leadName={user?.displayName ?? 'You'}
-                  onAdd={(c) => setCoExperimenters((prev) => [...prev, c])}
-                  onRemove={(uid) =>
-                    setCoExperimenters((prev) => prev.filter((c) => c.uid !== uid))
-                  }
+          {isEditing ? (
+            /* ── Edit mode ── */
+            <form onSubmit={handleSave} className="space-y-6">
+
+              {/* Co-Experimenters */}
+              <div className="card p-6">
+                <label className="block text-sm font-semibold mb-1"
+                  style={{ color: 'var(--color-text)' }}>
+                  Co-Experimenters
+                </label>
+                <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
+                  Add collaborators who are running this experiment with you.
+                </p>
+                {design && (
+                  <CoExperimentersPicker
+                    selected={coExperimenters}
+                    leadUid={execution.experimenter_uid}
+                    leadName={user?.displayName ?? 'You'}
+                    onAdd={(c) => setCoExperimenters((prev) => [...prev, c])}
+                    onRemove={(uid) =>
+                      setCoExperimenters((prev) => prev.filter((c) => c.uid !== uid))
+                    }
+                  />
+                )}
+              </div>
+
+              {/* Start Date */}
+              <div className="card p-6">
+                <label
+                  htmlFor="start-date"
+                  className="block text-sm font-semibold mb-1"
+                  style={{ color: 'var(--color-text)' }}
+                >
+                  Start Date
+                </label>
+                <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
+                  When did you begin running this experiment? Adjust if the date is incorrect.
+                </p>
+                <input
+                  id="start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="input-sm"
                 />
+              </div>
+
+              {/* Methodology Deviations */}
+              <div className="card p-6">
+                <label
+                  htmlFor="deviations"
+                  className="block text-sm font-semibold mb-1"
+                  style={{ color: 'var(--color-text)' }}
+                >
+                  Methodology Deviations
+                </label>
+                <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
+                  Note any ways your execution deviated from the original design methodology — materials
+                  substitutions, procedural changes, unexpected conditions, etc.
+                </p>
+                <textarea
+                  id="deviations"
+                  rows={5}
+                  value={deviations}
+                  onChange={(e) => setDeviations(e.target.value)}
+                  placeholder="Describe any deviations from the design methodology…"
+                  className="w-full input-sm resize-y"
+                />
+              </div>
+
+              {/* Error feedback */}
+              {saveError && (
+                <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+                  {saveError}
+                </p>
               )}
-            </div>
 
-            {/* Start Date */}
-            <div className="card p-6">
-              <label
-                htmlFor="start-date"
-                className="block text-sm font-semibold mb-1"
-                style={{ color: 'var(--color-text)' }}
-              >
-                Start Date
-              </label>
-              <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
-                When did you begin running this experiment? Pre-populated with today, but you can
-                adjust it.
-              </p>
-              <input
-                id="start-date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                disabled={!isLead}
-                className="input-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            {/* Methodology Deviations */}
-            <div className="card p-6">
-              <label
-                htmlFor="deviations"
-                className="block text-sm font-semibold mb-1"
-                style={{ color: 'var(--color-text)' }}
-              >
-                Methodology Deviations
-              </label>
-              <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
-                Note any ways your execution deviated from the original design methodology — materials
-                substitutions, procedural changes, unexpected conditions, etc.
-              </p>
-              <textarea
-                id="deviations"
-                rows={5}
-                value={deviations}
-                onChange={(e) => setDeviations(e.target.value)}
-                disabled={!isLead}
-                placeholder="Describe any deviations from the design methodology…"
-                className="w-full input-sm resize-y disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            {/* Error / success feedback */}
-            {saveError && (
-              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
-                {saveError}
-              </p>
-            )}
-            {saveSuccess && (
-              <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2">
-                Changes saved.
-              </p>
-            )}
-
-            {/* Actions */}
-            {isLead && (
+              {/* Actions */}
               <div className="flex flex-col gap-3">
                 <button
                   type="submit"
                   disabled={saving}
                   className="btn-primary text-sm justify-center disabled:opacity-50"
                 >
-                  {saving ? 'Saving…' : 'Save'}
+                  {saving ? 'Saving…' : 'Save Changes'}
                 </button>
 
                 <div className="border-t border-surface-2 pt-3">
@@ -670,8 +712,86 @@ export default function ExecutionForm() {
                   </p>
                 </div>
               </div>
-            )}
-          </form>
+            </form>
+          ) : (
+            /* ── View mode ── */
+            <div className="space-y-6">
+
+              {/* Co-Experimenters (read-only) */}
+              <div className="card p-6">
+                <p className="text-sm font-semibold mb-3" style={{ color: 'var(--color-text)' }}>
+                  Co-Experimenters
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs
+                                   bg-gray-100 text-gray-600 border border-gray-200">
+                    {user?.displayName ?? 'You'}
+                    <span className="text-gray-400 font-normal">Lead</span>
+                  </span>
+                  {coExperimenters.length === 0 ? (
+                    <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      No co-experimenters.
+                    </span>
+                  ) : (
+                    coExperimenters.map((c) => (
+                      <span
+                        key={c.uid}
+                        className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs
+                                   border border-gray-200 bg-white"
+                        style={{ color: 'var(--color-text)' }}
+                      >
+                        {c.displayName}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Start Date (read-only) */}
+              <div className="card p-6">
+                <p className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
+                  Start Date
+                </p>
+                <p className="text-sm mt-2" style={{ color: 'var(--color-text)' }}>
+                  {formattedStartDate}
+                </p>
+              </div>
+
+              {/* Methodology Deviations (read-only) */}
+              <div className="card p-6">
+                <p className="text-sm font-semibold mb-3" style={{ color: 'var(--color-text)' }}>
+                  Methodology Deviations
+                </p>
+                {deviations.trim() ? (
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap"
+                    style={{ color: 'var(--color-text)' }}>
+                    {deviations}
+                  </p>
+                ) : (
+                  <p className="text-sm italic" style={{ color: 'var(--color-text-muted)' }}>
+                    No deviations noted yet.
+                  </p>
+                )}
+              </div>
+
+              {/* Cancel experiment (lead only, accessible from view mode) */}
+              {isLead && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCancelConfirm(true)}
+                    className="w-full px-4 py-2 rounded-xl text-sm font-medium border border-red-200
+                               text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    Cancel Experiment
+                  </button>
+                  <p className="mt-2 text-xs text-center" style={{ color: 'var(--color-text-muted)' }}>
+                    Cancelling undoes this run as if it never started.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Right: design reference (1/3, sticky) ── */}
