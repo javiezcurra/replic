@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '../lib/firebase'
 import { AppError } from '../middleware/errorHandler'
+import { createNotification, createNotifications, getDisplayName } from '../lib/notifications'
 import {
   Design,
   DesignResponse,
@@ -108,6 +109,89 @@ function mergeDraftWithMain(draftData: Design, main: Design): Design {
 
 function draftRef(designId: string) {
   return adminDb.collection(DESIGNS).doc(designId).collection('draft').doc('current')
+}
+
+// Fire-and-forget: notify users added/removed from a design's coauthor list.
+async function notifyCoauthorChanges(
+  actorUid: string,
+  design: Design,
+  newCoauthorUids: string[],
+): Promise<void> {
+  const oldSet = new Set(design.coauthor_uids ?? [])
+  const newSet = new Set(newCoauthorUids)
+  const actorName = await getDisplayName(actorUid)
+
+  for (const uid of newSet) {
+    if (!oldSet.has(uid) && uid !== actorUid) {
+      createNotification(uid, {
+        type: 'added_to_experiment',
+        message: `You were added as a co-author of "${design.title}"`,
+        link: `/designs/${design.id}`,
+        actor_uid: actorUid,
+        actor_name: actorName,
+        design_id: design.id,
+        design_title: design.title,
+      })
+    }
+  }
+  for (const uid of oldSet) {
+    if (!newSet.has(uid) && uid !== actorUid) {
+      createNotification(uid, {
+        type: 'removed_from_experiment',
+        message: `You were removed from "${design.title}"`,
+        link: '/designs/mine',
+        actor_uid: actorUid,
+        actor_name: actorName,
+        design_id: design.id,
+        design_title: design.title,
+      })
+    }
+  }
+}
+
+// Fire-and-forget: notify co-authors (other than publisher) and watchlist subscribers
+// that a new version was published.
+async function notifyNewVersion(
+  publisherUid: string,
+  design: Design,
+): Promise<void> {
+  const publisherName = await getDisplayName(publisherUid)
+
+  // Notify other co-authors
+  const coauthorsToNotify = (design.author_ids ?? []).filter((uid) => uid !== publisherUid)
+  createNotifications(coauthorsToNotify, {
+    type: 'experiment_new_version_coauthor',
+    message: `${publisherName} published a new version of "${design.title}"`,
+    link: `/designs/${design.id}`,
+    actor_uid: publisherUid,
+    actor_name: publisherName,
+    design_id: design.id,
+    design_title: design.title,
+  })
+
+  // Notify watchlist subscribers (via collection group query)
+  try {
+    const watchlistSnap = await adminDb
+      .collectionGroup('watchlist')
+      .where('designId', '==', design.id)
+      .get()
+
+    for (const doc of watchlistSnap.docs) {
+      // The path is users/{uid}/watchlist/{designId}
+      const watcherUid = doc.ref.parent.parent?.id
+      if (watcherUid && watcherUid !== publisherUid && !design.author_ids.includes(watcherUid)) {
+        createNotification(watcherUid, {
+          type: 'watchlist_new_version',
+          message: `"${design.title}" was updated with a new published version`,
+          link: `/designs/${design.id}`,
+          design_id: design.id,
+          design_title: design.title,
+        })
+      }
+    }
+  } catch (err) {
+    console.error('[notifications] watchlist collectionGroup query failed:', err)
+  }
 }
 
 function versionsRef(designId: string) {
@@ -339,6 +423,9 @@ export async function updateDesign(
         patch.author_ids = [design.owner_uid, ...body.coauthor_uids]
       }
       await ref.update(patch)
+      if (body.coauthor_uids !== undefined) {
+        notifyCoauthorChanges(req.user!.uid, design, body.coauthor_uids).catch(() => {})
+      }
       const updated = await ref.get()
       res.status(200).json({ status: 'ok', data: toResponse(updated.data() as Design) })
       return
@@ -366,6 +453,9 @@ export async function updateDesign(
         mainPatch.author_ids = [design.owner_uid, ...body.coauthor_uids]
       }
       await ref.update(mainPatch)
+      if (body.coauthor_uids !== undefined) {
+        notifyCoauthorChanges(req.user!.uid, design, body.coauthor_uids).catch(() => {})
+      }
     } else {
       // Subsequent edit: update the existing draft document.
       const draftSnap = await dr.get()
@@ -385,6 +475,9 @@ export async function updateDesign(
         mainPatch.author_ids = [design.owner_uid, ...body.coauthor_uids]
       }
       await ref.update(mainPatch)
+      if (body.coauthor_uids !== undefined) {
+        notifyCoauthorChanges(req.user!.uid, design, body.coauthor_uids).catch(() => {})
+      }
     }
 
     const [updatedDraftSnap, updatedMainSnap] = await Promise.all([dr.get(), ref.get()])
@@ -438,6 +531,10 @@ export async function publishDesign(
       }
       if (changelog?.trim()) snapshot.changelog = changelog.trim()
       await versionsRef(req.params.id).doc(String(newPublishedVersion)).set(snapshot)
+
+      // Notify co-authors and watchlist subscribers (first publish has no watchers yet,
+      // but co-authors still deserve the notice)
+      notifyNewVersion(req.user!.uid, published).catch(() => {})
 
       res.status(200).json({ status: 'ok', data: toResponse(published) })
       return
@@ -497,6 +594,9 @@ export async function publishDesign(
       }
       if (effectiveChangelog) snapshot.changelog = effectiveChangelog
       await versionsRef(req.params.id).doc(String(newPublishedVersion)).set(snapshot)
+
+      // Notify co-authors and watchlist subscribers
+      notifyNewVersion(req.user!.uid, published).catch(() => {})
 
       res.status(200).json({ status: 'ok', data: toResponse(published) })
       return

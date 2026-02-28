@@ -5,6 +5,7 @@ import { adminDb } from '../lib/firebase'
 import { AppError } from '../middleware/errorHandler'
 import { Design } from '../types/design'
 import { upsertWatchlistEntry } from './watchlistController'
+import { createNotification, createNotifications, getDisplayName } from '../lib/notifications'
 import {
   Review,
   FieldSuggestion,
@@ -253,6 +254,23 @@ export async function submitReview(
 
     // Auto-add the reviewed design to the reviewer's watchlist (fire-and-forget)
     upsertWatchlistEntry(callerId, id, 'review').catch(() => {})
+
+    // Notify design authors about the new/updated review
+    if (!isUpdate) {
+      getDisplayName(callerId).then((reviewerName) => {
+        const authors = (design.author_ids ?? []).filter((uid) => uid !== callerId)
+        createNotifications(authors, {
+          type: 'experiment_review_received',
+          message: `${reviewerName} submitted a review on "${design.title}"`,
+          link: `/designs/${id}`,
+          actor_uid: callerId,
+          actor_name: reviewerName,
+          design_id: id,
+          design_title: design.title,
+          review_id: reviewId,
+        })
+      }).catch(() => {})
+    }
 
     // Read back the committed documents
     const [reviewSnap, suggsSnap] = await Promise.all([
@@ -586,6 +604,26 @@ export async function acceptSuggestion(
 
     await batch.commit()
 
+    // Notify the reviewer their suggestion was accepted
+    const reviewSnap = await reviewsRef(designId).doc(reviewId).get()
+    if (reviewSnap.exists) {
+      const review = reviewSnap.data() as { reviewerId: string }
+      if (review.reviewerId !== callerId) {
+        getDisplayName(callerId).then(() => {
+          createNotification(review.reviewerId, {
+            type: 'review_interaction',
+            review_action: 'accepted',
+            message: `Your suggestion on "${design.title}" was accepted`,
+            link: `/designs/${designId}`,
+            actor_uid: callerId,
+            design_id: designId,
+            design_title: design.title,
+            review_id: reviewId,
+          })
+        }).catch(() => {})
+      }
+    }
+
     const updatedSnap = await suggRef.get()
     const updated = updatedSnap.data() as FieldSuggestion
 
@@ -620,6 +658,26 @@ export async function closeSuggestion(
     const now = FieldValue.serverTimestamp()
     const suggRef = suggestionRef(designId, reviewId, suggestionId)
     await suggRef.update({ status: 'closed', updatedAt: now })
+
+    // Notify the reviewer their suggestion was closed
+    const reviewSnap = await reviewsRef(designId).doc(reviewId).get()
+    if (reviewSnap.exists) {
+      const review = reviewSnap.data() as { reviewerId: string; designId: string }
+      const designSnap = await adminDb.collection(DESIGNS).doc(designId).get()
+      const designTitle = (designSnap.data() as Design | undefined)?.title ?? 'a design'
+      if (review.reviewerId !== callerId) {
+        createNotification(review.reviewerId, {
+          type: 'review_interaction',
+          review_action: 'closed',
+          message: `Your suggestion on "${designTitle}" was closed`,
+          link: `/designs/${designId}`,
+          actor_uid: callerId,
+          design_id: designId,
+          design_title: designTitle,
+          review_id: reviewId,
+        })
+      }
+    }
 
     const updatedSnap = await suggRef.get()
     const updated = updatedSnap.data() as FieldSuggestion
@@ -665,6 +723,24 @@ export async function replySuggestion(
     const now = FieldValue.serverTimestamp()
     const suggRef = suggestionRef(designId, reviewId, suggestionId)
     await suggRef.update({ ownerReply: reply, updatedAt: now })
+
+    // Notify the reviewer that the author replied to their suggestion
+    const reviewSnap = await reviewsRef(designId).doc(reviewId).get()
+    if (reviewSnap.exists) {
+      const review = reviewSnap.data() as { reviewerId: string }
+      if (review.reviewerId !== callerId) {
+        createNotification(review.reviewerId, {
+          type: 'review_interaction',
+          review_action: 'replied',
+          message: `The author of "${design.title}" replied to your suggestion`,
+          link: `/designs/${designId}`,
+          actor_uid: callerId,
+          design_id: designId,
+          design_title: design.title,
+          review_id: reviewId,
+        })
+      }
+    }
 
     const updatedSnap = await suggRef.get()
     const updated = updatedSnap.data() as FieldSuggestion
