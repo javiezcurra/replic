@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '../lib/firebase'
 import type { UserProfile, UserSearchResult } from '../types/user'
 import { AppError } from '../middleware/errorHandler'
+import { createNotification, getDisplayName } from '../lib/notifications'
 
 const USERS = 'users'
 const REQUESTS = 'collaboration_requests'
@@ -101,6 +102,19 @@ export async function sendCollaborationRequest(
     const docRef = await requestsRef.add({ fromUid, toUid, status: 'pending', createdAt: now, updatedAt: now })
     const created = await docRef.get()
     const d = created.data()!
+
+    // Notify recipient
+    getDisplayName(fromUid).then((name) => {
+      createNotification(toUid, {
+        type: 'collaboration_request_received',
+        message: `${name} sent you a collaboration request`,
+        link: '/collaborators',
+        actor_uid: fromUid,
+        actor_name: name,
+        request_id: docRef.id,
+      })
+    }).catch(() => {})
+
     res.status(201).json({
       status: 'ok',
       data: { id: docRef.id, fromUid: d.fromUid, toUid: d.toUid, status: d.status, createdAt: toTimestamp(d.createdAt), updatedAt: toTimestamp(d.updatedAt) },
@@ -180,6 +194,18 @@ export async function acceptCollaborationRequest(
     batch.set(adminDb.collection(USERS).doc(callerUid).collection('collaborators').doc(d.fromUid), { uid: d.fromUid, since: now, requestId })
     batch.set(adminDb.collection(USERS).doc(d.fromUid).collection('collaborators').doc(callerUid), { uid: callerUid, since: now, requestId })
     await batch.commit()
+
+    // Notify the original sender that their request was accepted
+    getDisplayName(callerUid).then((name) => {
+      createNotification(d.fromUid, {
+        type: 'collaboration_request_accepted',
+        message: `${name} accepted your collaboration request`,
+        link: '/collaborators',
+        actor_uid: callerUid,
+        actor_name: name,
+        request_id: requestId,
+      })
+    }).catch(() => {})
 
     res.status(200).json({ status: 'ok' })
   } catch (err) {

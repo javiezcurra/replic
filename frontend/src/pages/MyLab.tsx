@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { Design } from '../types/design'
 import type { Material } from '../types/material'
 import type { CollaboratorEntry, UserPublicProfile } from '../types/user'
+import type { Notification } from '../types/notification'
 import DesignCard from '../components/DesignCard'
 import UserDisplayName from '../components/UserDisplayName'
 import UserProfileModal from '../components/UserProfileModal'
@@ -303,8 +304,57 @@ const SIDEBAR_SECTIONS = [
 
 // ─── Command Center layout ────────────────────────────────────────────────────
 
+// ─── Inbox notification row ───────────────────────────────────────────────────
+
+function InboxRow({ notification, onDismiss }: {
+  notification: Notification
+  onDismiss: (id: string, link: string) => void
+}) {
+  return (
+    <button
+      onClick={() => onDismiss(notification.id, notification.link)}
+      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors"
+    >
+      <span className="flex items-start gap-2">
+        <span
+          className="shrink-0 mt-1 w-1.5 h-1.5 rounded-full"
+          style={{ background: 'var(--color-primary)', opacity: notification.read ? 0 : 1 }}
+        />
+        <span className="min-w-0">
+          <span className="block text-xs text-white/80 leading-snug truncate" title={notification.message}>
+            {notification.message}
+          </span>
+        </span>
+      </span>
+    </button>
+  )
+}
+
+// ─── Command Center ───────────────────────────────────────────────────────────
+
 function CommandCenter({ data }: { data: LabHubData }) {
   const [profileModal, setProfileModal] = useState<UserPublicProfile | null>(null)
+  const [inboxNotifications, setInboxNotifications] = useState<Notification[]>([])
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    api.get<{ status: string; data: Notification[] }>('/api/users/me/notifications')
+      .then((res) => {
+        const unread = res.data.filter((n) => !n.read).slice(0, 5)
+        setInboxNotifications(unread)
+      })
+      .catch(() => {})
+  }, [])
+
+  async function handleInboxDismiss(id: string, link: string) {
+    try {
+      await api.patch(`/api/users/me/notifications/${id}/dismiss`)
+      setInboxNotifications((prev) => prev.filter((n) => n.id !== id))
+    } catch {
+      // fire-and-forget
+    }
+    navigate(link)
+  }
 
   const counts: Record<string, number> = {
     workbench:       data.workbench.length,
@@ -340,7 +390,7 @@ function CommandCenter({ data }: { data: LabHubData }) {
         </div>
 
         {/* Section nav */}
-        <nav className="flex flex-col px-2 pb-5 gap-0.5">
+        <nav className="flex flex-col px-2 gap-0.5">
           {SIDEBAR_SECTIONS.map((s) => (
             <a
               key={s.id}
@@ -361,6 +411,31 @@ function CommandCenter({ data }: { data: LabHubData }) {
             </a>
           ))}
         </nav>
+
+        {/* Inbox section */}
+        <div className="mx-2 mb-4 mt-3 rounded-xl overflow-hidden border border-white/10">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-white/60 uppercase tracking-wider">
+              <span>📬</span> Inbox
+            </span>
+            <Link
+              to="/notifications"
+              className="text-xs text-white/40 hover:text-white/70 transition-colors"
+            >
+              all →
+            </Link>
+          </div>
+          {/* Fixed height: shows up to 5 open notifications */}
+          <div className="overflow-y-auto" style={{ maxHeight: '170px' }}>
+            {inboxNotifications.length === 0 ? (
+              <p className="px-3 py-3 text-xs text-white/40 text-center">All caught up ✓</p>
+            ) : (
+              inboxNotifications.map((n) => (
+                <InboxRow key={n.id} notification={n} onDismiss={handleInboxDismiss} />
+              ))
+            )}
+          </div>
+        </div>
       </aside>
 
       {/* ── Main content ── */}

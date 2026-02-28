@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { NavLink, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchUserProfile } from '../lib/userProfileCache'
+import NotificationBell from './NotificationBell'
 
 const publicNavLinks = [
   { to: '/', label: 'Home', end: true },
@@ -87,6 +88,9 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-1">
             {loading ? null : user ? (
               <>
+                {/* Notification bell */}
+                <NotificationBell />
+
                 {/* Admin Panel dropdown */}
                 {isAdmin && (
                   <div className="relative">

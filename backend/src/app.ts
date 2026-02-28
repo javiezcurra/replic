@@ -10,6 +10,7 @@ import designsRouter from './routes/designs'
 import materialsRouter from './routes/materials'
 import labRouter from './routes/lab'
 import categoriesRouter from './routes/categories'
+import notificationsRouter from './routes/notifications'
 
 const app = express()
 
@@ -40,6 +41,7 @@ app.use('/api/designs', designsRouter)
 app.use('/api/materials', materialsRouter)
 app.use('/api/lab', labRouter)
 app.use('/api/categories', categoriesRouter)
+app.use('/api/users/me/notifications', notificationsRouter)
 
 // Error handling (must be last)
 app.use(notFound)

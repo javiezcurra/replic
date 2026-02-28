@@ -16,6 +16,7 @@ import CreateMaterial from './pages/CreateMaterial'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Collaborators from './pages/Collaborators'
+import NotificationsPage from './pages/Notifications'
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="designs/mine" element={<MyDesigns />} />
           <Route path="designs/new" element={<CreateDesign />} />
           <Route path="designs/:id/edit" element={<EditDesign />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           {/* Admin-only — access guard is in the Materials component */}
           <Route path="materials" element={<Materials />} />
           <Route path="materials/new" element={<CreateMaterial />} />
