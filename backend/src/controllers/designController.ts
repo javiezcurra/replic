@@ -125,7 +125,7 @@ async function notifyCoauthorChanges(
     if (!oldSet.has(uid) && uid !== actorUid) {
       createNotification(uid, {
         type: 'added_to_experiment',
-        message: `You were added as a co-author of "${design.title}"`,
+        message: `${actorName} added you as a co-author of "${design.title}"`,
         link: `/designs/${design.id}`,
         actor_uid: actorUid,
         actor_name: actorName,
@@ -138,7 +138,7 @@ async function notifyCoauthorChanges(
     if (!newSet.has(uid) && uid !== actorUid) {
       createNotification(uid, {
         type: 'removed_from_experiment',
-        message: `You were removed from "${design.title}"`,
+        message: `${actorName} removed you from "${design.title}"`,
         link: '/designs/mine',
         actor_uid: actorUid,
         actor_name: actorName,
@@ -169,28 +169,37 @@ async function notifyNewVersion(
     design_title: design.title,
   })
 
-  // Notify watchlist subscribers (via collection group query)
-  try {
-    const watchlistSnap = await adminDb
-      .collectionGroup('watchlist')
-      .where('designId', '==', design.id)
-      .get()
+  // Notify watchlist and pipeline subscribers via collection group queries.
+  // De-duplicate: a user may have the design in both collections.
+  const subscriberPayload = {
+    type: 'watchlist_new_version' as const,
+    message: `"${design.title}" was updated with a new published version`,
+    link: `/designs/${design.id}`,
+    design_id: design.id,
+    design_title: design.title,
+  }
+  const notifiedSubscribers = new Set<string>()
 
-    for (const doc of watchlistSnap.docs) {
-      // The path is users/{uid}/watchlist/{designId}
-      const watcherUid = doc.ref.parent.parent?.id
-      if (watcherUid && watcherUid !== publisherUid && !design.author_ids.includes(watcherUid)) {
-        createNotification(watcherUid, {
-          type: 'watchlist_new_version',
-          message: `"${design.title}" was updated with a new published version`,
-          link: `/designs/${design.id}`,
-          design_id: design.id,
-          design_title: design.title,
-        })
+  try {
+    const [watchlistSnap, pipelineSnap] = await Promise.all([
+      adminDb.collectionGroup('watchlist').where('designId', '==', design.id).get(),
+      adminDb.collectionGroup('pipeline').where('designId', '==', design.id).get(),
+    ])
+
+    for (const doc of [...watchlistSnap.docs, ...pipelineSnap.docs]) {
+      const subscriberUid = doc.ref.parent.parent?.id
+      if (
+        subscriberUid &&
+        subscriberUid !== publisherUid &&
+        !design.author_ids.includes(subscriberUid) &&
+        !notifiedSubscribers.has(subscriberUid)
+      ) {
+        notifiedSubscribers.add(subscriberUid)
+        createNotification(subscriberUid, subscriberPayload)
       }
     }
   } catch (err) {
-    console.error('[notifications] watchlist collectionGroup query failed:', err)
+    console.error('[notifications] subscriber collectionGroup query failed:', err)
   }
 }
 

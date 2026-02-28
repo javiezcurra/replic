@@ -313,15 +313,20 @@ function InboxRow({ notification, onDismiss }: {
   return (
     <button
       onClick={() => onDismiss(notification.id, notification.link)}
-      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors"
+      className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors
+                 border-b border-gray-50 last:border-0"
     >
       <span className="flex items-start gap-2">
         <span
-          className="shrink-0 mt-1 w-1.5 h-1.5 rounded-full"
+          className="shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full"
           style={{ background: 'var(--color-primary)', opacity: notification.read ? 0 : 1 }}
         />
         <span className="min-w-0">
-          <span className="block text-xs text-white/80 leading-snug truncate" title={notification.message}>
+          <span
+            className="block text-xs leading-snug truncate"
+            style={{ color: 'var(--color-text)', fontFamily: 'var(--font-body)' }}
+            title={notification.message}
+          >
             {notification.message}
           </span>
         </span>
@@ -374,69 +379,84 @@ function CommandCenter({ data }: { data: LabHubData }) {
     <>
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex gap-6 items-start">
 
-      {/* ── Sidebar ── */}
-      <aside
-        className="hidden lg:flex flex-col w-52 shrink-0 rounded-2xl overflow-hidden"
-        style={{ position: 'sticky', top: '80px', background: 'var(--color-dark)' }}
+      {/* ── Left column: sticky nav sidebar + inbox ── */}
+      <div
+        className="hidden lg:flex flex-col gap-3 w-52 shrink-0"
+        style={{ position: 'sticky', top: '80px' }}
       >
-        {/* Sidebar header */}
-        <div className="px-5 pt-5 pb-4">
-          <h1
-            className="text-2xl text-white"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            My Lab
-          </h1>
-        </div>
-
-        {/* Section nav */}
-        <nav className="flex flex-col px-2 gap-0.5">
-          {SIDEBAR_SECTIONS.map((s) => (
-            <a
-              key={s.id}
-              href={`#cc-${s.id}`}
-              className="flex items-center justify-between px-3 py-2 rounded-xl text-sm
-                         text-white/70 hover:text-white hover:bg-white/10 transition-all"
+        {/* Dark nav sidebar */}
+        <aside
+          className="flex flex-col rounded-2xl overflow-hidden"
+          style={{ background: 'var(--color-dark)' }}
+        >
+          {/* Sidebar header */}
+          <div className="px-5 pt-5 pb-4">
+            <h1
+              className="text-2xl text-white"
+              style={{ fontFamily: 'var(--font-display)' }}
             >
-              <span className="flex items-center gap-2">
-                <span>{s.icon}</span>
-                <span className="font-medium">{s.label}</span>
-              </span>
-              <span
-                className="text-xs text-white/40"
-                style={{ fontFamily: 'var(--font-mono)' }}
-              >
-                {counts[s.id] ?? 0}
-              </span>
-            </a>
-          ))}
-        </nav>
+              My Lab
+            </h1>
+          </div>
 
-        {/* Inbox section */}
-        <div className="mx-2 mb-4 mt-3 rounded-xl overflow-hidden border border-white/10">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-white/60 uppercase tracking-wider">
-              <span>📬</span> Inbox
+          {/* Section nav */}
+          <nav className="flex flex-col px-2 pb-5 gap-0.5">
+            {SIDEBAR_SECTIONS.map((s) => (
+              <a
+                key={s.id}
+                href={`#cc-${s.id}`}
+                className="flex items-center justify-between px-3 py-2 rounded-xl text-sm
+                           text-white/70 hover:text-white hover:bg-white/10 transition-all"
+              >
+                <span className="flex items-center gap-2">
+                  <span>{s.icon}</span>
+                  <span className="font-medium">{s.label}</span>
+                </span>
+                <span
+                  className="text-xs text-white/40"
+                  style={{ fontFamily: 'var(--font-mono)' }}
+                >
+                  {counts[s.id] ?? 0}
+                </span>
+              </a>
+            ))}
+          </nav>
+        </aside>
+
+        {/* Inbox — own white card, same style as section cards */}
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+            <span
+              className="flex items-center gap-1.5 text-sm font-semibold"
+              style={{ color: 'var(--color-text)', fontFamily: 'var(--font-body)' }}
+            >
+              📬 Inbox
             </span>
             <Link
               to="/notifications"
-              className="text-xs text-white/40 hover:text-white/70 transition-colors"
+              className="text-xs font-medium hover:underline transition-colors"
+              style={{ color: 'var(--color-primary)' }}
             >
-              all →
+              See all
             </Link>
           </div>
           {/* Fixed height: shows up to 5 open notifications */}
-          <div className="overflow-y-auto" style={{ maxHeight: '170px' }}>
+          <div className="overflow-y-auto" style={{ maxHeight: '180px' }}>
             {inboxNotifications.length === 0 ? (
-              <p className="px-3 py-3 text-xs text-white/40 text-center">All caught up ✓</p>
+              <p
+                className="px-4 py-4 text-xs text-center"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                All caught up ✓
+              </p>
             ) : (
               inboxNotifications.map((n) => (
                 <InboxRow key={n.id} notification={n} onDismiss={handleInboxDismiss} />
               ))
             )}
           </div>
-        </div>
-      </aside>
+        </section>
+      </div>
 
       {/* ── Main content ── */}
       <main className="flex-1 min-w-0 space-y-6">

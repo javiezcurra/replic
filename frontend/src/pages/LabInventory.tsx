@@ -71,7 +71,7 @@ export default function MyLab() {
               className="text-5xl sm:text-6xl text-ink"
               style={{ fontFamily: 'var(--font-display)' }}
             >
-              My Lab
+              Lab Inventory
             </h1>
             <p className="mt-2 text-lg text-plum">
               Materials you use.
