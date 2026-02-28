@@ -10,8 +10,17 @@ Read this file at the start of every session. Full documentation lives in `/docs
 > pull request targeting `main`.** Do not wait to be asked. Do not push and
 > move on. Push → open PR, every time, no exceptions.
 >
-> Use `gh pr create` or the GitHub API. Include a summary of changes and a
-> test-plan checklist in the PR body.
+> `gh` is **not installed**. Use the GitHub API via curl with `$GH_TOKEN`:
+>
+> ```bash
+> curl -s -X POST "https://api.github.com/repos/javiezcurra/replic/pulls" \
+>   -H "Authorization: Bearer $GH_TOKEN" \
+>   -H "Content-Type: application/json" \
+>   -d '{"title":"...","head":"<branch>","base":"main","body":"..."}' \
+>   | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('html_url') or d)"
+> ```
+>
+> Include a summary of changes and a test-plan checklist in the PR body.
 
 ---
 
