@@ -13,6 +13,7 @@ import categoriesRouter from './routes/categories'
 import notificationsRouter from './routes/notifications'
 import disciplinesRouter from './routes/disciplines'
 import adminRouter from './routes/admin'
+import executionsRouter from './routes/executions'
 
 const app = express()
 
@@ -45,6 +46,7 @@ app.use('/api/lab', labRouter)
 app.use('/api/categories', categoriesRouter)
 app.use('/api/disciplines', disciplinesRouter)
 app.use('/api/admin', adminRouter)
+app.use('/api/executions', executionsRouter)
 app.use('/api/users/me/notifications', notificationsRouter)
 
 // Error handling (must be last)

@@ -19,6 +19,7 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Collaborators from './pages/Collaborators'
 import NotificationsPage from './pages/Notifications'
+import ExecutionForm from './pages/ExecutionForm'
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="designs/mine" element={<MyDesigns />} />
           <Route path="designs/new" element={<CreateDesign />} />
           <Route path="designs/:id/edit" element={<EditDesign />} />
+          <Route path="executions/:id" element={<ExecutionForm />} />
           <Route path="notifications" element={<NotificationsPage />} />
           {/* Admin-only — access guard is in each component */}
           <Route path="materials" element={<Materials />} />

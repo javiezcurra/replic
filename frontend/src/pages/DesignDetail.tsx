@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { Design, DesignMaterial, ForkType, DesignVersionSummary, DesignVersionSnapshot } from '../types/design'
+import type { Execution } from '../types/execution'
 import type { Material } from '../types/material'
 import MaterialCard from '../components/MaterialCard'
 import MaterialDetailModal from '../components/MaterialDetailModal'
@@ -69,7 +70,7 @@ export default function DesignDetail() {
   const [pipelineLoading, setPipelineLoading] = useState(false)
   const [inWatchlist, setInWatchlist] = useState<boolean | null>(null)
   const [watchlistLoading, setWatchlistLoading] = useState(false)
-  const [startToast, setStartToast] = useState(false)
+  const [startingExperiment, setStartingExperiment] = useState(false)
 
   async function loadMaterials(materials: DesignMaterial[]) {
     if (!materials.length) return
@@ -226,10 +227,16 @@ export default function DesignDetail() {
     }
   }
 
-  function handleStartExperiment() {
+  async function handleStartExperiment() {
     if (!user) { navigate('/login'); return }
-    setStartToast(true)
-    setTimeout(() => setStartToast(false), 3000)
+    setStartingExperiment(true)
+    try {
+      const res = await api.post<{ status: string; data: Execution }>(`/api/designs/${id}/executions`)
+      navigate(`/executions/${res.data.id}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start experiment')
+      setStartingExperiment(false)
+    }
   }
 
   function handleEditClick() {
@@ -738,28 +745,41 @@ export default function DesignDetail() {
               )}
             </div>
 
-            {/* "Start Experiment" toast */}
-            {startToast && (
-              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl shadow-lg text-sm font-medium text-white"
-                style={{ background: 'var(--color-dark)' }}>
-                Experiment execution coming soon!
-              </div>
-            )}
-
             {/* Actions */}
             <div className="card p-5">
               <SectionLabel>Actions</SectionLabel>
 
               {/* Community actions */}
               <div className="space-y-2">
-                {/* Start Experiment — published only, non-functional placeholder */}
-                <button
-                  onClick={design.status === 'published' ? handleStartExperiment : undefined}
-                  disabled={design.status !== 'published'}
-                  className="w-full btn-primary text-sm justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Start Experiment
-                </button>
+                {/* Start Experiment */}
+                {(() => {
+                  const readyToRun =
+                    (design.status === 'published' || design.status === 'locked') &&
+                    !design.has_draft_changes
+                  const hasDraft =
+                    design.status === 'published' && design.has_draft_changes
+                  const notPublished = design.status === 'draft'
+                  return (
+                    <div className="relative group">
+                      <button
+                        onClick={readyToRun ? handleStartExperiment : undefined}
+                        disabled={!readyToRun || startingExperiment}
+                        className="w-full btn-primary text-sm justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {startingExperiment ? 'Starting…' : 'Start Experiment'}
+                      </button>
+                      {(hasDraft || notPublished) && (
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64
+                                        bg-gray-900 text-white text-xs rounded-lg px-3 py-2 text-center
+                                        opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
+                          {hasDraft
+                            ? 'The author of this experiment is working on a new draft version'
+                            : 'This design must be published before it can be run'}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 {/* Pipeline — only for non-authors on published designs */}
                 {design.status === 'published' && !isAuthor && (

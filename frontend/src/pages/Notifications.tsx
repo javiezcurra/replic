@@ -30,6 +30,9 @@ const TYPE_ICONS: Record<string, string> = {
   experiment_new_version_coauthor: '🚀',
   watchlist_new_version:           '👁️',
   review_interaction:              '💬',
+  experiment_started:              '🧪',
+  added_as_co_experimenter:        '🔬',
+  removed_as_co_experimenter:      '➖',
 }
 
 // Renders the notification message, turning the actor_name substring into a
