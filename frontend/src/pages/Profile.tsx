@@ -381,7 +381,7 @@ function ChangePasswordSection({ firebaseUser }: ChangePasswordSectionProps) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Profile() {
-  const { user, isAdmin } = useAuth()
+  const { user } = useAuth()
 
   const isEmailProvider = user?.providerData.some(p => p.providerId === 'password') ?? false
 
