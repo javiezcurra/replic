@@ -3,6 +3,7 @@ import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebas
 import { storage } from '../lib/firebase'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useDisciplines } from '../hooks/useDisciplines'
 import type {
   CreateDesignBody,
   Criticality,
@@ -57,7 +58,7 @@ export interface DesignFormValues {
   // ── Basic fields ─────────────────────────────────────────────────────────
   title: string
   summary: string
-  discipline_tags: string
+  discipline: string
   difficulty_level: DifficultyLevel
   materials: DesignMaterialEntry[]
   steps: DesignStep[]
@@ -83,7 +84,7 @@ export function defaultFormValues(): DesignFormValues {
   return {
     title: '',
     summary: '',
-    discipline_tags: '',
+    discipline: '',
     difficulty_level: 'Undergraduate',
     materials: [],
     steps: [{ step_number: 1, instruction: '' }],
@@ -108,7 +109,7 @@ export function formValuesToBody(v: DesignFormValues): CreateDesignBody {
   return {
     title: v.title,
     summary: v.summary,
-    discipline_tags: v.discipline_tags.split(',').map((t) => t.trim()).filter(Boolean),
+    discipline_tags: v.discipline ? [v.discipline] : [],
     difficulty_level: v.difficulty_level,
     materials: v.materials.map((m): DesignMaterial => ({
       material_id: m.id,
@@ -857,6 +858,7 @@ function CoauthorsPicker({
 export default function DesignForm({ values, onChange, lockedMethodology = false, ownerUid }: Props) {
   const [showMaterialsDrawer, setShowMaterialsDrawer] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const { disciplines } = useDisciplines()
 
   function set<K extends keyof DesignFormValues>(key: K, val: DesignFormValues[K]) {
     onChange({ ...values, [key]: val })
@@ -953,18 +955,23 @@ export default function DesignForm({ values, onChange, lockedMethodology = false
           />
         </div>
 
-        {/* Discipline tags + Difficulty */}
+        {/* Discipline + Difficulty */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <FieldLabel label="Discipline tags" required />
-            <input
-              type="text"
+            <FieldLabel label="Discipline" required />
+            <select
               required
-              value={values.discipline_tags}
-              onChange={(e) => set('discipline_tags', e.target.value)}
-              placeholder="biology, ecology  (comma-separated)"
+              value={values.discipline}
+              onChange={(e) => set('discipline', e.target.value)}
               className="w-full input-sm"
-            />
+            >
+              <option value="">Select a discipline…</option>
+              {disciplines.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.emoji ? `${d.emoji} ${d.name}` : d.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <FieldLabel label="Difficulty level" required />

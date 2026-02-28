@@ -61,7 +61,7 @@ function designToFormValues(d: Design): DesignFormValues {
   return {
     title: d.title,
     summary: d.summary ?? '',
-    discipline_tags: d.discipline_tags.join(', '),
+    discipline: d.discipline_tags[0] ?? '',
     difficulty_level: d.difficulty_level,
     // Populated with placeholder names; loadMaterialDetails() overwrites with real names.
     materials: d.materials.map((m) => ({

@@ -13,6 +13,8 @@ import EditDesign from './pages/EditDesign'
 import DesignDetail from './pages/DesignDetail'
 import Materials from './pages/Materials'
 import CreateMaterial from './pages/CreateMaterial'
+import AdminUsers from './pages/AdminUsers'
+import AdminExperiments from './pages/AdminExperiments'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Collaborators from './pages/Collaborators'
@@ -39,9 +41,11 @@ export default function App() {
           <Route path="designs/new" element={<CreateDesign />} />
           <Route path="designs/:id/edit" element={<EditDesign />} />
           <Route path="notifications" element={<NotificationsPage />} />
-          {/* Admin-only — access guard is in the Materials component */}
+          {/* Admin-only — access guard is in each component */}
           <Route path="materials" element={<Materials />} />
           <Route path="materials/new" element={<CreateMaterial />} />
+          <Route path="admin/users" element={<AdminUsers />} />
+          <Route path="admin/experiments" element={<AdminExperiments />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />

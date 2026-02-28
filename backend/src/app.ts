@@ -11,6 +11,8 @@ import materialsRouter from './routes/materials'
 import labRouter from './routes/lab'
 import categoriesRouter from './routes/categories'
 import notificationsRouter from './routes/notifications'
+import disciplinesRouter from './routes/disciplines'
+import adminRouter from './routes/admin'
 
 const app = express()
 
@@ -41,6 +43,8 @@ app.use('/api/designs', designsRouter)
 app.use('/api/materials', materialsRouter)
 app.use('/api/lab', labRouter)
 app.use('/api/categories', categoriesRouter)
+app.use('/api/disciplines', disciplinesRouter)
+app.use('/api/admin', adminRouter)
 app.use('/api/users/me/notifications', notificationsRouter)
 
 // Error handling (must be last)
