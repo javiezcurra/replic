@@ -157,7 +157,7 @@ export default function NotificationBell() {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 w-80 bg-white rounded-xl shadow-lg
+          className="absolute right-0 top-full mt-1 w-72 sm:w-80 bg-white rounded-xl shadow-lg
                      border border-gray-200 overflow-hidden z-50"
         >
           {/* Header */}
