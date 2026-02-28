@@ -146,17 +146,30 @@ export async function getLabMatches(
         .map((d) => d.id),
     )
 
-    // 6. Score each design against the user's equipment
+    // 5.5. Load the "Household Items" bundle (if it exists) so we can treat
+    //      those materials as freely available to everyone.
+    const householdSnap = await adminDb
+      .collection('bundles')
+      .where('name', '==', 'Household Items')
+      .limit(1)
+      .get()
+    const householdIds = new Set<string>(
+      householdSnap.empty ? [] : (householdSnap.docs[0].data().material_ids as string[] ?? []),
+    )
+
+    // 6. Score each design against the user's equipment.
+    //    Household items are excluded from requirements — users are assumed
+    //    to have them on hand even if they haven't added them to their lab.
     const full: Record<string, unknown>[]    = []
     const partial: Record<string, unknown>[] = []
 
     for (const doc of designsSnap.docs) {
       const data = doc.data() as Design
 
-      // Equipment material IDs this design requires
+      // Equipment material IDs this design requires, minus household items
       const designEquipIds = (data.materials ?? [])
         .map((m) => m.material_id)
-        .filter((id) => equipmentIds.has(id))
+        .filter((id) => equipmentIds.has(id) && !householdIds.has(id))
 
       if (designEquipIds.length === 0) continue // no equipment needed; skip
 
