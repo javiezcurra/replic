@@ -381,7 +381,7 @@ function ChangePasswordSection({ firebaseUser }: ChangePasswordSectionProps) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Profile() {
-  const { user, isAdmin, refreshIsAdmin } = useAuth()
+  const { user } = useAuth()
 
   const isEmailProvider = user?.providerData.some(p => p.providerId === 'password') ?? false
 
@@ -395,9 +395,6 @@ export default function Profile() {
   const [saving, setSaving]           = useState(false)
   const [saveStatus, setSaveStatus]   = useState<'idle' | 'success' | 'error'>('idle')
   const [saveError, setSaveError]     = useState('')
-
-  // Admin toggle
-  const [togglingAdmin, setTogglingAdmin] = useState(false)
 
   // Discoverability
   const [discoverable, setDiscoverable] = useState(false)
@@ -457,16 +454,6 @@ export default function Profile() {
       setSaveError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
       setSaving(false)
-    }
-  }
-
-  async function handleToggleAdmin() {
-    setTogglingAdmin(true)
-    try {
-      await api.patch<ApiResponse<UserProfile>>('/api/users/me', { is_admin: !isAdmin })
-      await refreshIsAdmin()
-    } finally {
-      setTogglingAdmin(false)
     }
   }
 
@@ -552,36 +539,6 @@ export default function Profile() {
                 <span
                   className={`inline-block h-4 w-4 transform rounded-full bg-white shadow
                               transition-transform duration-200 ${discoverable ? 'translate-x-4' : 'translate-x-0.5'}`}
-                />
-              </button>
-            </div>
-          </div>
-
-          {/* Dev admin toggle */}
-          <div className="rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">
-                  Dev tool · remove before prod
-                </p>
-                <p className="text-sm text-amber-900">
-                  Admin access — currently{' '}
-                  <span className="font-semibold">{isAdmin ? 'enabled' : 'disabled'}</span>
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleToggleAdmin}
-                disabled={togglingAdmin}
-                className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full
-                            border-2 transition-colors duration-200 focus:outline-none
-                            disabled:opacity-50 ${
-                  isAdmin ? 'border-amber-500 bg-amber-500' : 'border-gray-300 bg-gray-200'
-                }`}
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow
-                              transition-transform duration-200 ${isAdmin ? 'translate-x-5' : 'translate-x-0.5'}`}
                 />
               </button>
             </div>
