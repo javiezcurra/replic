@@ -74,9 +74,10 @@ export async function listAdmins(
     const snap = await adminDb
       .collection(USERS)
       .where('is_admin', '==', true)
-      .orderBy('createdAt', 'asc')
       .get()
-    const data = snap.docs.map((d) => toResponse(d.data() as UserProfile))
+    const data = snap.docs
+      .map((d) => toResponse(d.data() as UserProfile))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     res.json({ status: 'ok', data, total: data.length })
   } catch (err) {
     next(err)
