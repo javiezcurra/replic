@@ -4,6 +4,17 @@ Read this file at the start of every session. Full documentation lives in `/docs
 
 ---
 
+> ## ⚠️ ALWAYS OPEN A PULL REQUEST AFTER PUSHING
+>
+> **Every single time you push code to any branch, you MUST immediately open a
+> pull request targeting `main`.** Do not wait to be asked. Do not push and
+> move on. Push → open PR, every time, no exceptions.
+>
+> Use `gh pr create` or the GitHub API. Include a summary of changes and a
+> test-plan checklist in the PR body.
+
+---
+
 ## What Replic Is
 
 A scientific platform that decouples experimental **design** from **execution**, treating both as independent, peer-reviewable contributions. Core principles:

@@ -42,10 +42,15 @@ export async function addToPipeline(
       return next(badRequest('Only published designs can be added to the pipeline'))
     }
 
-    await pipelineRef(uid).doc(designId).set(
-      { designId, addedAt: FieldValue.serverTimestamp() },
-      { merge: true },
-    )
+    await Promise.all([
+      pipelineRef(uid).doc(designId).set(
+        { designId, addedAt: FieldValue.serverTimestamp() },
+        { merge: true },
+      ),
+      adminDb.collection(DESIGNS).doc(designId).update({
+        pipeline_uids: FieldValue.arrayUnion(uid),
+      }),
+    ])
 
     res.status(200).json({ status: 'ok', message: 'Added to pipeline' })
   } catch (err) {
@@ -63,7 +68,12 @@ export async function removeFromPipeline(
     const uid = req.user!.uid
     const { designId } = req.params
 
-    await pipelineRef(uid).doc(designId).delete()
+    await Promise.all([
+      pipelineRef(uid).doc(designId).delete(),
+      adminDb.collection(DESIGNS).doc(designId).update({
+        pipeline_uids: FieldValue.arrayRemove(uid),
+      }),
+    ])
     res.status(200).json({ status: 'ok', message: 'Removed from pipeline' })
   } catch (err) {
     next(err)
