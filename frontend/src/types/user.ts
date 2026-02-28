@@ -62,3 +62,9 @@ export interface CollaboratorEntry {
   role: UserRole | null
   since: string | null
 }
+
+// Full profile as returned by admin endpoints (includes email)
+export interface UserProfileResponse extends UserPublicProfile {
+  email: string
+  discoverable: boolean
+}

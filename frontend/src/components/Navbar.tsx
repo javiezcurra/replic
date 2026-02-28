@@ -10,7 +10,9 @@ const publicNavLinks = [
 ]
 
 const adminNavLinks = [
-  { to: '/materials', label: 'Materials', end: true },
+  { to: '/admin/users',       label: 'Users',                end: true },
+  { to: '/admin/experiments', label: 'Experiment Settings',  end: true },
+  { to: '/materials',         label: 'Materials',            end: true },
 ]
 
 export default function Navbar() {

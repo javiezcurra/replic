@@ -9,6 +9,8 @@ export type NotificationType =
   | 'experiment_new_version_coauthor'
   | 'watchlist_new_version'
   | 'review_interaction'
+  | 'admin_granted'
+  | 'admin_revoked'
 
 export type ReviewInteractionAction = 'accepted' | 'closed' | 'replied'
 
