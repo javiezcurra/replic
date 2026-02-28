@@ -177,6 +177,13 @@ export default function Navbar() {
             )}
           </div>
 
+          {/* Mobile: notification bell (only for logged-in users) */}
+          {!loading && user && (
+            <div className="md:hidden">
+              <NotificationBell />
+            </div>
+          )}
+
           {/* Mobile hamburger */}
           <button
             className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"
