@@ -14,6 +14,12 @@ export type DataType = 'numeric' | 'categorical' | 'image' | 'text' | 'other'
 export type Criticality = 'required' | 'recommended' | 'optional'
 export type RiskLevel = 'none' | 'low' | 'moderate' | 'high'
 
+export interface DesignFile {
+  name: string
+  url: string
+  size: number  // bytes
+}
+
 export interface DesignStep {
   step_number: number
   instruction: string
@@ -79,6 +85,8 @@ export interface Design {
   fork_metadata?: ForkMetadata
   seeking_collaborators: boolean
   sample_size?: number
+  cover_image_url?: string
+  design_files?: DesignFile[]
   analysis_plan?: string
   ethical_considerations?: string
   disclaimers?: string
@@ -109,6 +117,8 @@ export interface CreateDesignBody {
   ethical_considerations?: string
   disclaimers?: string
   coauthor_uids?: string[]
+  cover_image_url?: string
+  design_files?: DesignFile[]
 }
 
 export interface UpdateDesignBody extends Partial<CreateDesignBody> {
