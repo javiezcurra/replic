@@ -169,8 +169,8 @@ async function notifyNewVersion(
     design_title: design.title,
   })
 
-  // Notify watchlist and pipeline subscribers via collection group queries.
-  // De-duplicate: a user may have the design in both collections.
+  // Notify watchlist and pipeline subscribers.
+  // UIDs are stored directly on the design document — no collection group query needed.
   const subscriberPayload = {
     type: 'watchlist_new_version' as const,
     message: `"${design.title}" was updated with a new published version`,
@@ -178,28 +178,16 @@ async function notifyNewVersion(
     design_id: design.id,
     design_title: design.title,
   }
-  const notifiedSubscribers = new Set<string>()
 
-  try {
-    const [watchlistSnap, pipelineSnap] = await Promise.all([
-      adminDb.collectionGroup('watchlist').where('designId', '==', design.id).get(),
-      adminDb.collectionGroup('pipeline').where('designId', '==', design.id).get(),
-    ])
+  const allSubscribers = new Set([
+    ...(design.watchlist_uids ?? []),
+    ...(design.pipeline_uids ?? []),
+  ])
 
-    for (const doc of [...watchlistSnap.docs, ...pipelineSnap.docs]) {
-      const subscriberUid = doc.ref.parent.parent?.id
-      if (
-        subscriberUid &&
-        subscriberUid !== publisherUid &&
-        !design.author_ids.includes(subscriberUid) &&
-        !notifiedSubscribers.has(subscriberUid)
-      ) {
-        notifiedSubscribers.add(subscriberUid)
-        createNotification(subscriberUid, subscriberPayload)
-      }
+  for (const subscriberUid of allSubscribers) {
+    if (subscriberUid !== publisherUid && !design.author_ids.includes(subscriberUid)) {
+      createNotification(subscriberUid, subscriberPayload)
     }
-  } catch (err) {
-    console.error('[notifications] subscriber collectionGroup query failed:', err)
   }
 }
 
@@ -270,6 +258,8 @@ export async function createDesign(
       execution_count: 0,
       scientific_value_points: 0,
       derived_design_count: 0,
+      watchlist_uids: [],
+      pipeline_uids: [],
       created_at: now,
       updated_at: now,
     }
@@ -585,6 +575,8 @@ export async function publishDesign(
         scientific_value_points: design.scientific_value_points,
         derived_design_count: design.derived_design_count,
         fork_metadata: design.fork_metadata,
+        watchlist_uids: design.watchlist_uids ?? [],
+        pipeline_uids: design.pipeline_uids ?? [],
         created_at: design.created_at,
         published_version: newPublishedVersion,
         has_draft_changes: false,

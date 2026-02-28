@@ -26,10 +26,15 @@ export async function upsertWatchlistEntry(
   designId: string,
   source: WatchlistSource,
 ): Promise<void> {
-  await watchlistRef(uid).doc(designId).set(
-    { designId, addedAt: FieldValue.serverTimestamp(), source },
-    { merge: true },
-  )
+  await Promise.all([
+    watchlistRef(uid).doc(designId).set(
+      { designId, addedAt: FieldValue.serverTimestamp(), source },
+      { merge: true },
+    ),
+    adminDb.collection(DESIGNS).doc(designId).update({
+      watchlist_uids: FieldValue.arrayUnion(uid),
+    }),
+  ])
 }
 
 // ─── POST /api/users/me/watchlist/:designId ───────────────────────────────────
@@ -62,7 +67,12 @@ export async function removeFromWatchlist(
     const uid = req.user!.uid
     const { designId } = req.params
 
-    await watchlistRef(uid).doc(designId).delete()
+    await Promise.all([
+      watchlistRef(uid).doc(designId).delete(),
+      adminDb.collection(DESIGNS).doc(designId).update({
+        watchlist_uids: FieldValue.arrayRemove(uid),
+      }),
+    ])
     res.status(200).json({ status: 'ok', message: 'Removed from watchlist' })
   } catch (err) {
     next(err)

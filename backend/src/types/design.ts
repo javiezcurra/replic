@@ -151,6 +151,8 @@ export interface Design {
   scientific_value_points: number
   derived_design_count: number
   fork_metadata?: ForkMetadata
+  watchlist_uids: string[]     // UIDs of users who have watchlisted this design
+  pipeline_uids: string[]      // UIDs of users who have pipelined this design
 
   created_at: Timestamp
   updated_at: Timestamp
