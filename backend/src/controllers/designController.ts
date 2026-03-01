@@ -4,6 +4,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '../lib/firebase'
 import { AppError } from '../middleware/errorHandler'
 import { createNotification, createNotifications, getDisplayName } from '../lib/notifications'
+import { recordEvent, recordEvents } from '../lib/ledger'
 import {
   Design,
   DesignResponse,
@@ -193,6 +194,64 @@ async function notifyNewVersion(
 
 function versionsRef(designId: string) {
   return adminDb.collection(DESIGNS).doc(designId).collection('versions')
+}
+
+// ─── Ledger helpers ───────────────────────────────────────────────────────────
+
+/** Fire-and-forget: award authors of each referenced design that was newly cited. */
+async function awardReferencedDesignAuthors(
+  referencingDesignId: string,
+  referencedIds: string[],
+): Promise<void> {
+  const snaps = await Promise.allSettled(
+    referencedIds.map((id) => adminDb.collection(DESIGNS).doc(id).get()),
+  )
+  for (let i = 0; i < snaps.length; i++) {
+    const r = snaps[i]
+    if (r.status === 'fulfilled' && r.value.exists) {
+      const referencedDesign = r.value.data() as Design
+      recordEvents(referencedDesign.author_ids, 'DESIGN_REFERENCED_BY_DESIGN', {
+        design_id: referencedIds[i],
+        referencing_design_id: referencingDesignId,
+      })
+    }
+  }
+}
+
+/** Fire-and-forget: award reviewers who had ≥1 accepted suggestion on the given design version. */
+async function awardReviewersWithAcceptedSuggestions(
+  designId: string,
+  versionNumber: number,
+): Promise<void> {
+  const reviewsSnap = await adminDb
+    .collection(DESIGNS)
+    .doc(designId)
+    .collection('reviews')
+    .where('versionNumber', '==', versionNumber)
+    .get()
+
+  const awardedReviewers = new Set<string>()
+
+  await Promise.allSettled(
+    reviewsSnap.docs.map(async (reviewDoc) => {
+      const review = reviewDoc.data() as { reviewerId: string; id: string }
+      const suggsSnap = await reviewDoc.ref
+        .collection('suggestions')
+        .where('status', '==', 'accepted')
+        .get()
+
+      if (!suggsSnap.empty && !awardedReviewers.has(review.reviewerId)) {
+        awardedReviewers.add(review.reviewerId)
+        recordEvent({
+          user_id: review.reviewerId,
+          event_type: 'DESIGN_VERSION_PUBLISHED_WITH_ACCEPTED_SUGGESTION',
+          design_id: designId,
+          design_version: versionNumber,
+          review_id: review.id,
+        })
+      }
+    }),
+  )
 }
 
 // ─── POST /api/designs ────────────────────────────────────────────────────────
@@ -535,6 +594,17 @@ export async function publishDesign(
       // but co-authors still deserve the notice)
       notifyNewVersion(req.user!.uid, published).catch(() => {})
 
+      // Ledger: award all authors for publishing
+      recordEvents(published.author_ids, 'DESIGN_PUBLISHED', {
+        design_id: published.id,
+        design_version: newPublishedVersion,
+      })
+
+      // Ledger: award authors of every referenced design
+      if (published.reference_experiment_ids?.length) {
+        awardReferencedDesignAuthors(published.id, published.reference_experiment_ids).catch(() => {})
+      }
+
       res.status(200).json({ status: 'ok', data: toResponse(published) })
       return
     }
@@ -598,6 +668,22 @@ export async function publishDesign(
 
       // Notify co-authors and watchlist subscribers
       notifyNewVersion(req.user!.uid, published).catch(() => {})
+
+      // Ledger: award all authors for publishing
+      recordEvents(published.author_ids, 'DESIGN_PUBLISHED', {
+        design_id: published.id,
+        design_version: newPublishedVersion,
+      })
+
+      // Ledger: award authors of newly-added reference experiments
+      const oldRefs = new Set(design.reference_experiment_ids ?? [])
+      const newRefs = (published.reference_experiment_ids ?? []).filter((id) => !oldRefs.has(id))
+      if (newRefs.length) {
+        awardReferencedDesignAuthors(published.id, newRefs).catch(() => {})
+      }
+
+      // Ledger: award reviewers who had accepted suggestions on the previous version
+      awardReviewersWithAcceptedSuggestions(published.id, design.published_version).catch(() => {})
 
       res.status(200).json({ status: 'ok', data: toResponse(published) })
       return
@@ -744,6 +830,12 @@ export async function forkDesign(
       .collection(DESIGNS)
       .doc(source.id)
       .update({ derived_design_count: source.derived_design_count + 1 })
+
+    // Ledger: award all authors of the parent design
+    recordEvents(source.author_ids, 'DESIGN_DERIVED_CREATED', {
+      design_id: source.id,
+      fork_design_id: docRef.id,
+    })
 
     const created = await docRef.get()
     res.status(201).json({ status: 'ok', data: toResponse(created.data() as Design) })
