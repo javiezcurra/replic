@@ -2,51 +2,21 @@
  * AdminExperiments — Admin Panel page for viewing all platform experiments
  * and managing disciplines.
  */
-import { useEffect, useState } from 'react'
-import { Navigate, Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../lib/api'
-import type { DesignStatus } from '../types/design'
+import type { Design } from '../types/design'
 import { useDisciplines } from '../hooks/useDisciplines'
 import ManageDisciplinesModal from '../components/ManageDisciplinesModal'
+import DesignCard from '../components/DesignCard'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface AdminDesignSummary {
-  id: string
-  title: string
-  status: DesignStatus
-  discipline_tags: string[]
-  difficulty_level: string
-  author_ids: string[]
-  execution_count: number
-  published_version: number
-  created_at: string
-  updated_at: string
-}
-
 interface AdminDesignsResponse {
   status: string
-  data: AdminDesignSummary[]
+  data: Design[]
   total: number
-}
-
-// ── Status badge ──────────────────────────────────────────────────────────────
-
-const STATUS_STYLES: Record<DesignStatus, string> = {
-  draft:     'bg-gray-100 text-gray-600',
-  published: 'bg-green-50 text-green-700',
-  locked:    'bg-amber-50 text-amber-700',
-}
-
-function StatusBadge({ status }: { status: DesignStatus }) {
-  return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${STATUS_STYLES[status] ?? STATUS_STYLES.draft}`}
-    >
-      {status}
-    </span>
-  )
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -55,10 +25,11 @@ export default function AdminExperiments() {
   const { user, isAdmin, loading: authLoading } = useAuth()
   const { disciplines, loading: discLoading, setDisciplines } = useDisciplines()
 
-  const [designs, setDesigns]         = useState<AdminDesignSummary[]>([])
-  const [total, setTotal]             = useState(0)
-  const [loading, setLoading]         = useState(true)
-  const [showDisciplines, setShowDisciplines] = useState(false)
+  const [designs, setDesigns]                   = useState<Design[]>([])
+  const [total, setTotal]                       = useState(0)
+  const [loading, setLoading]                   = useState(true)
+  const [showDisciplines, setShowDisciplines]   = useState(false)
+  const [searchQuery, setSearchQuery]           = useState('')
 
   useEffect(() => {
     if (!isAdmin) return
@@ -77,8 +48,16 @@ export default function AdminExperiments() {
     return <Navigate to="/" replace />
   }
 
-  // Build a discipline lookup for display
-  const disciplineMap = new Map(disciplines.map((d) => [d.id, d]))
+  const filteredDesigns = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim()
+    if (!q) return designs
+    return designs.filter(
+      (d) =>
+        d.title.toLowerCase().includes(q) ||
+        d.summary?.toLowerCase().includes(q) ||
+        d.hypothesis?.toLowerCase().includes(q),
+    )
+  }, [designs, searchQuery])
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-surface)' }}>
@@ -152,6 +131,37 @@ export default function AdminExperiments() {
           </span>
         </div>
 
+        {/* Search bar */}
+        <div className="relative mb-4">
+          <svg
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-400"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by title, summary, or hypothesis…"
+            className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border-2 border-surface-2
+                       bg-white focus:outline-none focus:border-ink transition-colors"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400
+                         hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+
         {loading ? (
           <div className="flex justify-center py-24">
             <div
@@ -159,76 +169,18 @@ export default function AdminExperiments() {
               style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
             />
           </div>
-        ) : designs.length === 0 ? (
+        ) : filteredDesigns.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-5xl mb-3">🔬</p>
-            <p className="text-muted text-sm">No experiments yet.</p>
+            <p className="text-muted text-sm">
+              {searchQuery ? `No experiments match "${searchQuery}".` : 'No experiments yet.'}
+            </p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            {/* Table header */}
-            <div className="hidden md:grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 px-5 py-3
-                            bg-gray-50 border-b border-gray-100 text-xs font-semibold text-muted uppercase tracking-wide">
-              <span>Title</span>
-              <span className="text-right">Status</span>
-              <span className="text-right">Discipline</span>
-              <span className="text-right">Runs</span>
-              <span className="text-right">Version</span>
-            </div>
-
-            {designs.map((d) => {
-              const disc = d.discipline_tags?.[0]
-                ? (disciplineMap.get(d.discipline_tags[0]) ?? { name: d.discipline_tags[0], emoji: '' })
-                : null
-
-              return (
-                <div
-                  key={d.id}
-                  className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto_auto] gap-2 md:gap-4
-                             items-center px-5 py-4 border-b border-gray-50 last:border-0
-                             hover:bg-gray-50/50 transition-colors"
-                >
-                  <div className="min-w-0">
-                    <Link
-                      to={`/designs/${d.id}`}
-                      className="text-sm font-medium text-ink hover:underline truncate block"
-                      title={d.title}
-                    >
-                      {d.title}
-                    </Link>
-                    <p className="text-xs text-muted mt-0.5">
-                      {d.difficulty_level} · {d.author_ids.length} author{d.author_ids.length !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between md:justify-end gap-2 md:gap-0">
-                    <span className="md:hidden text-xs text-muted">Status</span>
-                    <StatusBadge status={d.status} />
-                  </div>
-
-                  <div className="flex items-center justify-between md:justify-end gap-2 md:gap-0">
-                    <span className="md:hidden text-xs text-muted">Discipline</span>
-                    <span className="text-xs text-ink">
-                      {disc ? `${disc.emoji ? disc.emoji + ' ' : ''}${disc.name}` : '—'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between md:justify-end gap-2 md:gap-0">
-                    <span className="md:hidden text-xs text-muted">Runs</span>
-                    <span className="text-xs text-ink" style={{ fontFamily: 'var(--font-mono)' }}>
-                      {d.execution_count}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between md:justify-end gap-2 md:gap-0">
-                    <span className="md:hidden text-xs text-muted">Version</span>
-                    <span className="text-xs text-muted" style={{ fontFamily: 'var(--font-mono)' }}>
-                      v{d.published_version || '—'}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
+          <div className="space-y-2">
+            {filteredDesigns.map((d) => (
+              <DesignCard key={d.id} design={d} compact />
+            ))}
           </div>
         )}
       </div>
