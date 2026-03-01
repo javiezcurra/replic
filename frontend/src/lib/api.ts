@@ -38,7 +38,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
 
   if (!res.ok) {
-    throw new ApiError(res.status, `${method} ${path} → ${res.status}`, responseBody)
+    const message =
+      (responseBody as { message?: string } | null)?.message ??
+      `${method} ${path} → ${res.status}`
+    throw new ApiError(res.status, message, responseBody)
   }
 
   return responseBody as T

@@ -77,8 +77,6 @@ function validateCreate(body: CreateDesignBody): string | null {
   if (body.discipline_tags.length > 5) return 'discipline_tags cannot exceed 5'
   if (!body.difficulty_level || !DIFFICULTY_LEVELS.includes(body.difficulty_level))
     return `difficulty_level must be one of: ${DIFFICULTY_LEVELS.join(', ')}`
-  if (!Array.isArray(body.materials) || body.materials.length === 0)
-    return 'at least one material is required'
   if (!Array.isArray(body.steps) || body.steps.length === 0)
     return 'at least one step is required'
   if (!Array.isArray(body.research_questions) || body.research_questions.length === 0)
