@@ -44,6 +44,8 @@ interface LabHubData {
   published: Design[]
   collaborators: CollaboratorEntry[]
   labStats: LabStats
+  displayName: string
+  reviewsSubmitted: number
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -56,6 +58,7 @@ export default function MyLab() {
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([])
   const [collaborators, setCollaborators] = useState<CollaboratorEntry[]>([])
   const [labMaterials, setLabMaterials] = useState<Material[]>([])
+  const [reviewsSubmitted, setReviewsSubmitted] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const workbench = useMemo(
@@ -76,13 +79,14 @@ export default function MyLab() {
 
   useEffect(() => {
     async function fetchAll() {
-      const [designsRes, executionsRes, pipelineRes, watchlistRes, colsRes, labRes] = await Promise.allSettled([
+      const [designsRes, executionsRes, pipelineRes, watchlistRes, colsRes, labRes, statsRes] = await Promise.allSettled([
         api.get<{ status: string; data: Design[] }>('/api/designs/me/list'),
         api.get<{ status: string; data: Execution[] }>('/api/users/me/executions'),
         api.get<{ status: string; data: PipelineEntry[] }>('/api/users/me/pipeline'),
         api.get<{ status: string; data: WatchlistEntry[] }>('/api/users/me/watchlist'),
         api.get<{ status: string; data: CollaboratorEntry[] }>('/api/users/me/collaborators'),
         api.get<{ status: string; data: Material[] }>('/api/lab'),
+        api.get<{ status: string; data: { reviewsSubmitted: number } }>('/api/users/me/stats'),
       ])
       if (designsRes.status === 'fulfilled') setMyDesigns(designsRes.value.data)
       if (executionsRes.status === 'fulfilled') setRunningExperiments(executionsRes.value.data)
@@ -90,6 +94,7 @@ export default function MyLab() {
       if (watchlistRes.status === 'fulfilled') setWatchlist(watchlistRes.value.data)
       if (colsRes.status === 'fulfilled') setCollaborators(colsRes.value.data)
       if (labRes.status === 'fulfilled') setLabMaterials(labRes.value.data)
+      if (statsRes.status === 'fulfilled') setReviewsSubmitted(statsRes.value.data.reviewsSubmitted)
       setLoading(false)
     }
     fetchAll()
@@ -104,6 +109,8 @@ export default function MyLab() {
     published,
     collaborators,
     labStats,
+    displayName: user?.displayName ?? '',
+    reviewsSubmitted,
   }
 
   return (
@@ -374,6 +381,85 @@ function RunningExperimentCard({ execution, currentUid }: {
 
 // ─── Sidebar nav sections ─────────────────────────────────────────────────────
 
+// ─── User stats card (sidebar) ────────────────────────────────────────────────
+
+function UserStatsCard({ data }: { data: LabHubData }) {
+  const publishedCount   = data.published.length
+  const reviewsCount     = data.reviewsSubmitted
+  const completedCount   = 0 // placeholder — experiment completion not yet implemented
+
+  const stats = [
+    {
+      label: 'Published designs',
+      value: publishedCount,
+      icon: (
+        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+            d="M9 3h6m-6 0v7l-4 9a1 1 0 00.9 1.45h12.2A1 1 0 0019 19l-4-9V3m-6 0h6" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Reviews submitted',
+      value: reviewsCount,
+      icon: (
+        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2
+               M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2
+               m-6 9l2 2 4-4" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Experiments completed',
+      value: completedCount,
+      icon: (
+        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+    },
+  ]
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="px-4 pt-4 pb-3 border-b border-gray-50">
+        <p
+          className="text-lg leading-tight truncate"
+          style={{ fontFamily: 'var(--font-display)', color: 'var(--color-dark)' }}
+          title={data.displayName || 'My Stats'}
+        >
+          {data.displayName || 'My Stats'}
+        </p>
+      </div>
+
+      {/* Stats */}
+      <div className="px-4 py-3 space-y-3">
+        {stats.map((s) => (
+          <div key={s.label} className="flex items-center gap-2.5">
+            <span style={{ color: 'var(--color-secondary)' }}>{s.icon}</span>
+            <span
+              className="flex-1 text-xs leading-tight"
+              style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)' }}
+            >
+              {s.label}
+            </span>
+            <span
+              className="text-sm font-semibold tabular-nums"
+              style={{ color: 'var(--color-text)', fontFamily: 'var(--font-mono)' }}
+            >
+              {s.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const SIDEBAR_SECTIONS = [
   { id: 'workbench',     label: 'Workbench',     icon: '🔧' },
   { id: 'pipeline',      label: 'Pipeline',       icon: '⚗️' },
@@ -465,6 +551,9 @@ function CommandCenter({ data }: { data: LabHubData }) {
         className="hidden lg:flex flex-col gap-3 w-52 shrink-0"
         style={{ position: 'sticky', top: '80px' }}
       >
+        {/* User stats card */}
+        <UserStatsCard data={data} />
+
         {/* Dark nav sidebar */}
         <aside
           className="flex flex-col rounded-2xl overflow-hidden"

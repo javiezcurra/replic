@@ -158,6 +158,30 @@ export async function getUser(
 // GET /api/users/search?q=:query
 // Returns discoverable users whose displayName contains the query (case-insensitive).
 // Excludes the calling user. Max 20 results.
+// GET /api/users/me/stats
+// Returns high-level activity counts for the current user's My Lab stats card.
+export async function getMyStats(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const uid = req.user!.uid
+    // Count DESIGN_REVIEW_SUBMITTED events from the ledger (single-field where,
+    // no composite index required). Filter event type in memory.
+    const snap = await adminDb
+      .collection('contribution_ledger')
+      .where('user_id', '==', uid)
+      .get()
+    const reviewsSubmitted = snap.docs.filter(
+      (d) => d.data().event_type === 'DESIGN_REVIEW_SUBMITTED',
+    ).length
+    res.json({ status: 'ok', data: { reviewsSubmitted } })
+  } catch (err) {
+    next(err)
+  }
+}
+
 export async function searchUsers(
   req: Request,
   res: Response,
