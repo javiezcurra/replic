@@ -3,6 +3,7 @@ import { NavLink, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchUserProfile } from '../lib/userProfileCache'
 import NotificationBell from './NotificationBell'
+import NavSearch from './NavSearch'
 
 const publicNavLinks = [
   { to: '/', label: 'Home', end: true },
@@ -83,6 +84,11 @@ export default function Navbar() {
               </NavLink>
             ))}
           </nav>
+
+          {/* Desktop — global search */}
+          <div className="hidden md:flex flex-1 max-w-xs mx-4">
+            <NavSearch />
+          </div>
 
           {/* Desktop — right side: Admin Panel + user menu */}
           <div className="hidden md:flex items-center gap-1">
@@ -201,6 +207,9 @@ export default function Navbar() {
         {/* Mobile menu */}
         {mobileOpen && (
           <div className="md:hidden pb-4 space-y-1">
+            <div className="py-2">
+              <NavSearch />
+            </div>
             {publicNavLinks.map(({ to, label, end }) => (
               <NavLink key={to} to={to} end={end} onClick={() => setMobileOpen(false)} className={mobileNavLinkClass}>
                 {label}

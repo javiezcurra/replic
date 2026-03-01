@@ -95,94 +95,105 @@ export default function AdminExperiments() {
         </div>
       </div>
 
-      {/* Experiment list */}
+      {/* Two-column content area */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
 
-        {/* Section header banner */}
-        <div
-          className="rounded-2xl px-6 py-5 flex items-center justify-between gap-4 mb-4"
-          style={{ background: 'var(--color-dark)' }}
-        >
-          <div className="flex items-center gap-4">
+          {/* ── Left column: experiment list (2/3 width) ─────────────────────── */}
+          <div className="lg:col-span-2">
+
+            {/* Section header banner */}
             <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: 'rgba(255,255,255,0.12)' }}
+              className="rounded-2xl px-6 py-5 flex items-center justify-between gap-4 mb-4"
+              style={{ background: 'var(--color-dark)' }}
             >
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M9 3h6m-6 0v7l-4 9a1 1 0 00.9 1.45h12.2A1 1 0 0019 19l-4-9V3m-6 0h6" />
-              </svg>
-            </div>
-            <div>
-              <h2
-                className="text-2xl font-semibold text-white"
-                style={{ fontFamily: 'var(--font-display)' }}
+              <div className="flex items-center gap-4">
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(255,255,255,0.12)' }}
+                >
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M9 3h6m-6 0v7l-4 9a1 1 0 00.9 1.45h12.2A1 1 0 0019 19l-4-9V3m-6 0h6" />
+                  </svg>
+                </div>
+                <div>
+                  <h2
+                    className="text-2xl font-semibold text-white"
+                    style={{ fontFamily: 'var(--font-display)' }}
+                  >
+                    All Experiments
+                  </h2>
+                  <p className="text-white/60 text-sm">Drafts, published, and locked</p>
+                </div>
+              </div>
+              <span
+                className="text-white/40 text-3xl font-semibold tabular-nums shrink-0"
+                style={{ fontFamily: 'var(--font-mono)' }}
               >
-                All Experiments
-              </h2>
-              <p className="text-white/60 text-sm">Drafts, published, and locked</p>
+                {total}
+              </span>
             </div>
-          </div>
-          <span
-            className="text-white/40 text-3xl font-semibold tabular-nums shrink-0"
-            style={{ fontFamily: 'var(--font-mono)' }}
-          >
-            {total}
-          </span>
-        </div>
 
-        {/* Search bar */}
-        <div className="relative mb-4">
-          <svg
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-400"
-            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-          </svg>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by title, summary, or hypothesis…"
-            className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border-2 border-surface-2
-                       bg-white focus:outline-none focus:border-ink transition-colors"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400
-                         hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            {/* Search bar */}
+            <div className="relative mb-4">
+              <svg
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-400"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
               </svg>
-            </button>
-          )}
-        </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by title, summary, or hypothesis…"
+                className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border-2 border-surface-2
+                           bg-white focus:outline-none focus:border-ink transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400
+                             hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
 
-        {loading ? (
-          <div className="flex justify-center py-24">
-            <div
-              className="w-8 h-8 border-4 rounded-full animate-spin"
-              style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
-            />
+            {/* Cards — wrapped in white container for contrast */}
+            {loading ? (
+              <div className="flex justify-center py-24">
+                <div
+                  className="w-8 h-8 border-4 rounded-full animate-spin"
+                  style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
+                />
+              </div>
+            ) : filteredDesigns.length === 0 ? (
+              <div className="text-center py-16">
+                <p className="text-5xl mb-3">🔬</p>
+                <p className="text-muted text-sm">
+                  {searchQuery ? `No experiments match "${searchQuery}".` : 'No experiments yet.'}
+                </p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-2">
+                {filteredDesigns.map((d) => (
+                  <DesignCard key={d.id} design={d} compact />
+                ))}
+              </div>
+            )}
           </div>
-        ) : filteredDesigns.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-5xl mb-3">🔬</p>
-            <p className="text-muted text-sm">
-              {searchQuery ? `No experiments match "${searchQuery}".` : 'No experiments yet.'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {filteredDesigns.map((d) => (
-              <DesignCard key={d.id} design={d} compact />
-            ))}
-          </div>
-        )}
+
+          {/* ── Right column: reserved for future features ────────────────────── */}
+          <div className="hidden lg:block" />
+
+        </div>
       </div>
 
       {/* Disciplines modal */}

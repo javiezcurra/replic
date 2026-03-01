@@ -20,6 +20,7 @@ import Signup from './pages/Signup'
 import Collaborators from './pages/Collaborators'
 import NotificationsPage from './pages/Notifications'
 import ExecutionForm from './pages/ExecutionForm'
+import SearchResults from './pages/SearchResults'
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="signup" element={<Signup />} />
         <Route path="experiments" element={<Experiments />} />
         <Route path="designs/:id" element={<DesignDetail />} />
+        <Route path="search" element={<SearchResults />} />
 
         {/* Protected (logged-in users) */}
         <Route element={<PrivateRoute />}>
