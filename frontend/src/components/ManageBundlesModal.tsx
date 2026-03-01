@@ -551,10 +551,7 @@ export function BundleCard({
   const overflow = members.length - visible.length
 
   return (
-    <div
-      className="rounded-xl border border-gray-100 p-4"
-      style={{ background: 'var(--color-surface)' }}
-    >
+    <div className="rounded-xl border-2 border-surface-2 bg-white p-4">
       {/* Title row */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -607,16 +604,16 @@ export function BundleCard({
           {visible.map((m) => (
             <span
               key={m.id}
-              className="text-xs px-2 py-0.5 rounded-full border border-gray-200 bg-white"
-              style={{ color: 'var(--color-text)' }}
+              className="text-xs px-2 py-0.5 rounded-full border border-surface-2"
+              style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}
             >
               {m.name}
             </span>
           ))}
           {overflow > 0 && (
             <span
-              className="text-xs px-2 py-0.5 rounded-full border border-gray-200 bg-white"
-              style={{ color: 'var(--color-text-muted)' }}
+              className="text-xs px-2 py-0.5 rounded-full border border-surface-2"
+              style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
             >
               +{overflow} more
             </span>
