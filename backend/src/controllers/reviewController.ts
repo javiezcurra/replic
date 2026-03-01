@@ -657,9 +657,9 @@ export async function acceptSuggestion(
         }).catch(() => {})
       }
 
-      // Prefer reviewer_uid denormalized onto the suggestion; fall back to the
-      // parent review's reviewerId for suggestions written before that field existed.
-      const reviewerUid = suggestion.reviewer_uid || review.reviewerId
+      // review.reviewerId is the canonical reviewer identity — it is written once
+      // at review-creation time (in submitReview) and never overwritten.
+      const reviewerUid = review.reviewerId
 
       // Ledger: award the reviewer
       recordEvent({

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth'
-import { upsertMe, getMe, updateMe, getUser, searchUsers } from '../controllers/userController'
+import { upsertMe, getMe, updateMe, getUser, searchUsers, getMyStats } from '../controllers/userController'
 import {
   sendCollaborationRequest,
   getCollaborationRequests,
@@ -32,6 +32,7 @@ router.use(requireAuth)
 router.post('/me', upsertMe)
 router.get('/me', getMe)
 router.patch('/me', updateMe)
+router.get('/me/stats', getMyStats)
 
 // Own collaboration requests & collaborator list
 // (registered before /:id to avoid route shadowing)
