@@ -6,6 +6,7 @@ import { AppError } from '../middleware/errorHandler'
 import { Design } from '../types/design'
 import { upsertWatchlistEntry } from './watchlistController'
 import { createNotification, createNotifications, getDisplayName } from '../lib/notifications'
+import { recordEvent, recordEvents } from '../lib/ledger'
 import {
   Review,
   FieldSuggestion,
@@ -270,6 +271,24 @@ export async function submitReview(
           review_id: reviewId,
         })
       }).catch(() => {})
+
+      // Ledger: award the reviewer for submitting a new review
+      recordEvent({
+        user_id: callerId,
+        event_type: 'DESIGN_REVIEW_SUBMITTED',
+        design_id: id,
+        design_version: versionNumber,
+        review_id: reviewId,
+      })
+
+      // Ledger: if review includes an endorsement, award all design authors
+      if (endorsement) {
+        recordEvents(design.author_ids, 'DESIGN_ENDORSED', {
+          design_id: id,
+          design_version: versionNumber,
+          review_id: reviewId,
+        })
+      }
     }
 
     // Read back the committed documents
@@ -423,6 +442,20 @@ export async function endorseDesign(
     })
 
     await batch.commit()
+
+    // Ledger: award the reviewer for endorsing + award all design authors
+    recordEvent({
+      user_id: callerId,
+      event_type: 'DESIGN_REVIEW_SUBMITTED',
+      design_id: id,
+      design_version: versionNumber,
+      review_id: reviewId,
+    })
+    recordEvents(design.author_ids, 'DESIGN_ENDORSED', {
+      design_id: id,
+      design_version: versionNumber,
+      review_id: reviewId,
+    })
 
     const saved = (await reviewDocRef.get()).data() as Review
     res.status(201).json({ status: 'ok', data: toReviewResponse(saved, []) })
@@ -604,7 +637,7 @@ export async function acceptSuggestion(
 
     await batch.commit()
 
-    // Notify the reviewer their suggestion was accepted
+    // Notify the reviewer their suggestion was accepted; also record ledger events
     const reviewSnap = await reviewsRef(designId).doc(reviewId).get()
     if (reviewSnap.exists) {
       const review = reviewSnap.data() as { reviewerId: string }
@@ -621,6 +654,28 @@ export async function acceptSuggestion(
             review_id: reviewId,
           })
         }).catch(() => {})
+      }
+
+      // Ledger: award reviewer for having a suggestion accepted
+      recordEvent({
+        user_id: review.reviewerId,
+        event_type: 'REVIEW_SUGGESTION_ACCEPTED_ON_DESIGN',
+        design_id: designId,
+        design_version: suggestion.versionNumber,
+        review_id: reviewId,
+        suggestion_id: suggestionId,
+      })
+
+      // Ledger: extra award if this was a safety suggestion
+      if (suggestion.suggestionType === 'safety_concern') {
+        recordEvent({
+          user_id: review.reviewerId,
+          event_type: 'SAFETY_SUGGESTION_ACCEPTED',
+          design_id: designId,
+          design_version: suggestion.versionNumber,
+          review_id: reviewId,
+          suggestion_id: suggestionId,
+        })
       }
     }
 
