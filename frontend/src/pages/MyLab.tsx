@@ -383,10 +383,43 @@ function RunningExperimentCard({ execution, currentUid }: {
 
 // ─── User stats card (sidebar) ────────────────────────────────────────────────
 
+const STATS_CARD_THEMES = [
+  {
+    id: 'sienna',
+    bg:      '#C1502D',
+    text:    '#fff',
+    muted:   'rgba(255,255,255,0.65)',
+    iconCol: 'rgba(255,255,255,0.85)',
+    divider: 'rgba(255,255,255,0.15)',
+    swatch:  '#C1502D',
+  },
+  {
+    id: 'plum',
+    bg:      '#624763',
+    text:    '#fff',
+    muted:   'rgba(255,255,255,0.65)',
+    iconCol: 'rgba(255,255,255,0.85)',
+    divider: 'rgba(255,255,255,0.15)',
+    swatch:  '#624763',
+  },
+  {
+    id: 'blush',
+    bg:      '#EABFCB',
+    text:    '#1A1025',
+    muted:   '#624763',
+    iconCol: '#624763',
+    divider: 'rgba(47,24,71,0.12)',
+    swatch:  '#EABFCB',
+  },
+] as const
+
 function UserStatsCard({ data }: { data: LabHubData }) {
-  const publishedCount   = data.published.length
-  const reviewsCount     = data.reviewsSubmitted
-  const completedCount   = 0 // placeholder — experiment completion not yet implemented
+  const [themeIdx, setThemeIdx] = useState(0)
+  const theme = STATS_CARD_THEMES[themeIdx]
+
+  const publishedCount = data.published.length
+  const reviewsCount   = data.reviewsSubmitted
+  const completedCount = 0 // placeholder — experiment completion not yet implemented
 
   const stats = [
     {
@@ -424,32 +457,51 @@ function UserStatsCard({ data }: { data: LabHubData }) {
   ]
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="rounded-2xl overflow-hidden shadow-sm" style={{ background: theme.bg }}>
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-gray-50">
+      <div
+        className="px-4 pt-4 pb-3 flex items-start justify-between gap-2"
+        style={{ borderBottom: `1px solid ${theme.divider}` }}
+      >
         <p
           className="text-lg leading-tight truncate"
-          style={{ fontFamily: 'var(--font-display)', color: 'var(--color-dark)' }}
+          style={{ fontFamily: 'var(--font-display)', color: theme.text }}
           title={data.displayName || 'My Stats'}
         >
           {data.displayName || 'My Stats'}
         </p>
+
+        {/* Color swatches — temp toggle for preview */}
+        <div className="flex gap-1 shrink-0 mt-1">
+          {STATS_CARD_THEMES.map((t, i) => (
+            <button
+              key={t.id}
+              onClick={() => setThemeIdx(i)}
+              title={t.id}
+              className="w-3.5 h-3.5 rounded-full border-2 transition-transform hover:scale-110"
+              style={{
+                background: t.swatch,
+                borderColor: i === themeIdx ? theme.text : 'transparent',
+              }}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Stats */}
       <div className="px-4 py-3 space-y-3">
         {stats.map((s) => (
           <div key={s.label} className="flex items-center gap-2.5">
-            <span style={{ color: 'var(--color-secondary)' }}>{s.icon}</span>
+            <span style={{ color: theme.iconCol }}>{s.icon}</span>
             <span
               className="flex-1 text-xs leading-tight"
-              style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)' }}
+              style={{ color: theme.muted, fontFamily: 'var(--font-body)' }}
             >
               {s.label}
             </span>
             <span
               className="text-sm font-semibold tabular-nums"
-              style={{ color: 'var(--color-text)', fontFamily: 'var(--font-mono)' }}
+              style={{ color: theme.text, fontFamily: 'var(--font-mono)' }}
             >
               {s.value}
             </span>
