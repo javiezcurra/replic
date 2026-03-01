@@ -232,7 +232,7 @@ async function awardReviewersWithAcceptedSuggestions(
 
   await Promise.allSettled(
     reviewsSnap.docs.map(async (reviewDoc) => {
-      const review = reviewDoc.data() as { id: string }
+      const review = reviewDoc.data() as { id: string; reviewerId: string }
       const suggsSnap = await reviewDoc.ref
         .collection('suggestions')
         .where('status', '==', 'accepted')
@@ -240,9 +240,10 @@ async function awardReviewersWithAcceptedSuggestions(
 
       if (suggsSnap.empty) return
 
-      // Use reviewer_uid from the suggestion — denormalized at review-submission
-      // time, so it's the authoritative source of who the reviewer is.
-      const reviewerUid = (suggsSnap.docs[0].data() as { reviewer_uid: string }).reviewer_uid
+      // Prefer reviewer_uid denormalized on the suggestion; fall back to the
+      // parent review's reviewerId for suggestions written before that field existed.
+      const firstSugg = suggsSnap.docs[0].data() as { reviewer_uid?: string }
+      const reviewerUid = firstSugg.reviewer_uid || review.reviewerId
       if (!reviewerUid || awardedReviewers.has(reviewerUid)) return
 
       awardedReviewers.add(reviewerUid)

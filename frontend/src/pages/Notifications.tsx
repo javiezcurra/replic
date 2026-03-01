@@ -74,10 +74,12 @@ function MessageWithActor({
 function NotificationItem({
   notification,
   onDismiss,
+  onMarkRead,
   onActorClick,
 }: {
   notification: Notification
   onDismiss: (id: string, link: string) => void
+  onMarkRead: (id: string) => void
   onActorClick: (uid: string) => void
 }) {
   const icon = TYPE_ICONS[notification.type] ?? '🔔'
@@ -121,12 +123,29 @@ function NotificationItem({
         </span>
       </span>
 
-      {/* Unread dot */}
+      {/* Unread controls */}
       {!notification.read && (
-        <span
-          className="shrink-0 mt-2 w-2 h-2 rounded-full"
-          style={{ background: 'var(--color-primary)' }}
-        />
+        <span className="shrink-0 flex items-center gap-2 mt-1">
+          <span
+            onClick={(e) => { e.stopPropagation(); onMarkRead(notification.id) }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onMarkRead(notification.id) } }}
+            className="text-xs px-2 py-0.5 rounded-lg border transition-colors hover:opacity-80"
+            style={{
+              color: 'var(--color-primary)',
+              borderColor: 'var(--color-accent)',
+              background: 'var(--color-surface)',
+              fontFamily: 'var(--font-body)',
+            }}
+          >
+            Mark read
+          </span>
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{ background: 'var(--color-primary)' }}
+          />
+        </span>
       )}
     </button>
   )
@@ -147,6 +166,17 @@ export default function NotificationsPage() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  async function handleMarkRead(id: string) {
+    try {
+      await api.patch(`/api/users/me/notifications/${id}/dismiss`)
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+      )
+    } catch {
+      // fire-and-forget
+    }
+  }
 
   async function handleDismiss(id: string, link: string) {
     try {
@@ -234,6 +264,7 @@ export default function NotificationsPage() {
                   key={n.id}
                   notification={n}
                   onDismiss={handleDismiss}
+                  onMarkRead={handleMarkRead}
                   onActorClick={handleActorClick}
                 />
               ))}
