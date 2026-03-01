@@ -31,6 +31,8 @@ export interface FieldSuggestion {
   reviewId: string
   designId: string
   versionNumber: number
+  /** UID of the reviewer who authored this suggestion. Denormalized from the parent review. */
+  reviewer_uid: string
   fieldRef: string | null       // null = proposed new field
   newFieldName: string | null   // set when fieldRef is null
   proposedText: string | null

@@ -239,6 +239,7 @@ export async function submitReview(
         reviewId,
         designId: id,
         versionNumber,
+        reviewer_uid: callerId,
         fieldRef: s.fieldRef?.trim() || null,
         newFieldName: s.newFieldName?.trim() || null,
         proposedText: s.proposedText?.trim() || null,
@@ -656,9 +657,10 @@ export async function acceptSuggestion(
         }).catch(() => {})
       }
 
-      // Ledger: award reviewer for having a suggestion accepted
+      // Ledger: award the reviewer (use reviewer_uid from the suggestion itself —
+      // this is denormalized at review-submission time and is authoritative).
       recordEvent({
-        user_id: review.reviewerId,
+        user_id: suggestion.reviewer_uid,
         event_type: 'REVIEW_SUGGESTION_ACCEPTED_ON_DESIGN',
         design_id: designId,
         design_version: suggestion.versionNumber,
@@ -669,7 +671,7 @@ export async function acceptSuggestion(
       // Ledger: extra award if this was a safety suggestion
       if (suggestion.suggestionType === 'safety_concern') {
         recordEvent({
-          user_id: review.reviewerId,
+          user_id: suggestion.reviewer_uid,
           event_type: 'SAFETY_SUGGESTION_ACCEPTED',
           design_id: designId,
           design_version: suggestion.versionNumber,

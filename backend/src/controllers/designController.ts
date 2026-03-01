@@ -232,22 +232,27 @@ async function awardReviewersWithAcceptedSuggestions(
 
   await Promise.allSettled(
     reviewsSnap.docs.map(async (reviewDoc) => {
-      const review = reviewDoc.data() as { reviewerId: string; id: string }
+      const review = reviewDoc.data() as { id: string }
       const suggsSnap = await reviewDoc.ref
         .collection('suggestions')
         .where('status', '==', 'accepted')
         .get()
 
-      if (!suggsSnap.empty && !awardedReviewers.has(review.reviewerId)) {
-        awardedReviewers.add(review.reviewerId)
-        recordEvent({
-          user_id: review.reviewerId,
-          event_type: 'DESIGN_VERSION_PUBLISHED_WITH_ACCEPTED_SUGGESTION',
-          design_id: designId,
-          design_version: versionNumber,
-          review_id: review.id,
-        })
-      }
+      if (suggsSnap.empty) return
+
+      // Use reviewer_uid from the suggestion — denormalized at review-submission
+      // time, so it's the authoritative source of who the reviewer is.
+      const reviewerUid = (suggsSnap.docs[0].data() as { reviewer_uid: string }).reviewer_uid
+      if (!reviewerUid || awardedReviewers.has(reviewerUid)) return
+
+      awardedReviewers.add(reviewerUid)
+      recordEvent({
+        user_id: reviewerUid,
+        event_type: 'DESIGN_VERSION_PUBLISHED_WITH_ACCEPTED_SUGGESTION',
+        design_id: designId,
+        design_version: versionNumber,
+        review_id: review.id,
+      })
     }),
   )
 }
