@@ -5,6 +5,7 @@ import { UserProfile, UserProfileResponse } from '../types/user'
 import { Design } from '../types/design'
 import { AppError } from '../middleware/errorHandler'
 import { createNotification } from '../lib/notifications'
+import type { LedgerEntry, LedgerEventType } from '../types/ledger'
 
 const USERS = 'users'
 const PAGE_SIZE = 25
@@ -143,6 +144,70 @@ export async function revokeAdmin(
     })
 
     res.json({ status: 'ok' })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ─── GET /api/admin/ledger ────────────────────────────────────────────────────
+// Contribution ledger entries, most recent first.
+// Optional query params: user_id, event_type, design_id (all in-memory filtered).
+export async function listLedger(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const filterUserId    = (req.query.user_id    as string | undefined)?.trim() || undefined
+    const filterEventType = (req.query.event_type as string | undefined)?.trim() || undefined
+    const filterDesignId  = (req.query.design_id  as string | undefined)?.trim() || undefined
+
+    // Fetch up to 500 recent entries; filter in memory to avoid composite index requirements
+    const snap = await adminDb
+      .collection('contribution_ledger')
+      .orderBy('created_at', 'desc')
+      .limit(500)
+      .get()
+
+    let entries = snap.docs.map((d) => d.data() as LedgerEntry)
+
+    if (filterUserId)    entries = entries.filter((e) => e.user_id    === filterUserId)
+    if (filterEventType) entries = entries.filter((e) => e.event_type === filterEventType as LedgerEventType)
+    if (filterDesignId)  entries = entries.filter((e) => e.design_id  === filterDesignId)
+
+    // Resolve display names and design titles in parallel
+    const uniqueUserIds   = [...new Set(entries.map((e) => e.user_id))]
+    const uniqueDesignIds = [...new Set(entries.map((e) => e.design_id).filter(Boolean) as string[])]
+
+    const [userResults, designResults] = await Promise.all([
+      Promise.allSettled(uniqueUserIds.map((uid) => adminDb.collection(USERS).doc(uid).get())),
+      Promise.allSettled(uniqueDesignIds.map((id) => adminDb.collection('designs').doc(id).get())),
+    ])
+
+    const userNames: Record<string, string> = {}
+    uniqueUserIds.forEach((uid, i) => {
+      const r = userResults[i]
+      if (r.status === 'fulfilled' && r.value.exists) {
+        userNames[uid] = (r.value.data() as { displayName: string }).displayName
+      }
+    })
+
+    const designTitles: Record<string, string> = {}
+    uniqueDesignIds.forEach((id, i) => {
+      const r = designResults[i]
+      if (r.status === 'fulfilled' && r.value.exists) {
+        designTitles[id] = (r.value.data() as { title: string }).title
+      }
+    })
+
+    const data = entries.map((e) => ({
+      ...e,
+      created_at:         (e.created_at as FirebaseFirestore.Timestamp).toDate().toISOString(),
+      user_display_name:  userNames[e.user_id] ?? null,
+      design_title:       e.design_id ? (designTitles[e.design_id] ?? null) : null,
+    }))
+
+    res.json({ status: 'ok', data, total: data.length })
   } catch (err) {
     next(err)
   }

@@ -15,6 +15,7 @@ import Materials from './pages/Materials'
 import CreateMaterial from './pages/CreateMaterial'
 import AdminUsers from './pages/AdminUsers'
 import AdminExperiments from './pages/AdminExperiments'
+import AdminLedger from './pages/AdminLedger'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Collaborators from './pages/Collaborators'
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="materials/new" element={<CreateMaterial />} />
           <Route path="admin/users" element={<AdminUsers />} />
           <Route path="admin/experiments" element={<AdminExperiments />} />
+          <Route path="admin/ledger" element={<AdminLedger />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />

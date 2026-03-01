@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { requireAuth, requireAdmin } from '../middleware/auth'
-import { listAllUsers, listAdmins, makeAdmin, revokeAdmin, listAllDesigns } from '../controllers/adminController'
+import { listAllUsers, listAdmins, makeAdmin, revokeAdmin, listAllDesigns, listLedger } from '../controllers/adminController'
 import { listBundles, createBundle, updateBundle, deleteBundle } from '../controllers/bundleController'
 
 const router = Router()
@@ -12,6 +12,7 @@ router.get('/users/admins',              listAdmins)
 router.patch('/users/:uid/make-admin',   makeAdmin)
 router.patch('/users/:uid/revoke-admin', revokeAdmin)
 router.get('/designs',                   listAllDesigns)
+router.get('/ledger',                    listLedger)
 
 // Bundles
 router.get('/bundles',        listBundles)

@@ -13,6 +13,7 @@ const publicNavLinks = [
 const adminNavLinks = [
   { to: '/admin/users',       label: 'Users',                end: true },
   { to: '/admin/experiments', label: 'Experiment Settings',  end: true },
+  { to: '/admin/ledger',      label: 'Contributions Ledger', end: true },
   { to: '/materials',         label: 'Materials',            end: true },
 ]
 
