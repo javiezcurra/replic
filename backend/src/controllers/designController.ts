@@ -240,9 +240,11 @@ async function awardReviewersWithAcceptedSuggestions(
 
       if (suggsSnap.empty) return
 
-      // review.reviewerId is the canonical reviewer identity — written once at
-      // review-creation time (in submitReview) and never overwritten.
-      const reviewerUid = review.reviewerId
+      // suggestion.reviewer_uid is denormalized at suggestion-creation time,
+      // when callerId is guaranteed to be the reviewer. Fall back to
+      // review.reviewerId for suggestions predating that field.
+      const firstSugg = suggsSnap.docs[0].data() as { reviewer_uid?: string }
+      const reviewerUid = firstSugg.reviewer_uid || review.reviewerId
       if (!reviewerUid || awardedReviewers.has(reviewerUid)) return
 
       awardedReviewers.add(reviewerUid)
